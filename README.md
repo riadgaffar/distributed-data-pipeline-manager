@@ -193,9 +193,8 @@ go tool pprof -png ./bin/pipeline_manager cpu.pprof > cpu.png
 go tool pprof -png ./bin/pipeline_manager mem.pprof > mem.png
 ```
 ## CPU Graph:
-
-![CPU Graph](cpu.png)
+![CPU Graph](docs/images/cpu.png)
 
 ## Memory Graph:
 
-![Memory Graph](mem.png)
+![Memory Graph](docs/images/mem.png)
