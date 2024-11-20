@@ -17,7 +17,7 @@ distributed-data-pipeline-manager/
 │       └── sample-pipeline.yaml
 ├── src/
 |   ├── config/
-│   │   └── config.go           # Consumer logic
+│   │   └── config.go           # Configuration logic
 │   ├── consumer/
 │   │   └── consumer.go         # Consumer logic
 |   ├── execute_pipeline/
