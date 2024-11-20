@@ -1,4 +1,4 @@
-name: Enforce Branch Naming
+name: Enforce Branch Naming Convention
 
 on:
   pull_request:
@@ -16,4 +16,3 @@ jobs:
             echo "Branch name does not follow the naming convention (feature|bugfix|hotfix|release)/<name>."
             exit 1
           fi
-          
