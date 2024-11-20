@@ -1,0 +1,50 @@
+services:
+  # Existing Redpanda service
+  redpanda:
+    image: docker.redpanda.com/vectorized/redpanda:latest
+    ports:
+      - "9092:9092"
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+    volumes:
+      - ./redpanda-data:/var/lib/redpanda/data
+
+  # Existing Postgres service
+  postgres:
+    image: postgres:17
+    container_name: postgres-container
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pipelines
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus PushGateway service
+  prometheus-pushgateway:
+    image: prom/pushgateway
+    container_name: prometheus-pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redpanda-data:

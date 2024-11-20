@@ -1,0 +1,42 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+      {
+          "label": "Start Docker Services",
+          "type": "shell",
+          "command": "docker-compose up -d",
+          "isBackground": true,
+          "problemMatcher": {
+              "pattern": {
+                  "regexp": "^.*$",
+                  "file": 1,
+                  "location": 2,
+                  "message": 3
+              },
+              "background": {
+                  "activeOnStart": true,
+                  "beginsPattern": "^.*Starting.*$",
+                  "endsPattern": "^.*Done.*$"
+              }
+          }
+      },
+      {
+          "label": "Build",
+          "type": "shell",
+          "command": "go build -v ./...",
+          "group": {
+              "kind": "build",
+              "isDefault": true
+          }
+      },
+      {
+          "label": "Test",
+          "type": "shell",
+          "command": "go test -v ./...",
+          "group": {
+              "kind": "test",
+              "isDefault": true
+          }
+      }
+  ]
+}

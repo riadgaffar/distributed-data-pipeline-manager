@@ -1,0 +1,51 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+      {
+          "name": "Launch Program",
+          "type": "go",
+          "request": "launch",
+          "mode": "debug",
+          "program": "${workspaceFolder}/main.go",
+          "env": {
+              "PATH": "${env:PATH}",
+              "GOPATH": "${env:GOPATH}",
+              "GOROOT": "${env:GOROOT}"
+          },
+          "args": [],
+          "showLog": true,
+          "buildFlags": "-tags=debug",
+          "preLaunchTask": "Start Docker Services",
+          "cwd": "${workspaceFolder}"
+      },
+      {
+          "name": "Debug Unit Tests",
+          "type": "go",
+          "request": "launch",
+          "mode": "test",
+          "program": "${workspaceFolder}/src",
+          "env": {
+              "PATH": "${env:PATH}",
+              "GOPATH": "${env:GOPATH}",
+              "GOROOT": "${env:GOROOT}"
+          },
+          "args": ["-v"],
+          "showLog": true
+      },
+      {
+          "name": "Attach to Process",
+          "type": "go",
+          "request": "attach",
+          "mode": "remote",
+          "remotePath": "${workspaceFolder}",
+          "port": 2345,
+          "host": "127.0.0.1",
+          "showLog": true,
+          "env": {
+              "PATH": "${env:PATH}",
+              "GOPATH": "${env:GOPATH}",
+              "GOROOT": "${env:GOROOT}"
+          }
+      }
+  ]
+}
