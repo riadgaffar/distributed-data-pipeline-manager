@@ -46,7 +46,8 @@ func main() {
 
 	// Execute the pipeline
 	fmt.Println("DEBUG: Executing pipeline...")
-	err = execute_pipeline.ExecutePipeline(configPath)
+	executor := &execute_pipeline.RealCommandExecutor{} // Use the real command executor
+	err = execute_pipeline.ExecutePipeline(configPath, executor)
 	if err != nil {
 		log.Fatalf("ERROR: Pipeline execution failed: %v\n", err)
 	}
