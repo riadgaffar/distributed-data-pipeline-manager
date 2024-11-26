@@ -7,6 +7,8 @@ Distributed Data Pipeline Manager is licensed under the MIT License. See the LIC
 # Project structure
 ```bash
 distributed-data-pipeline-manager/
+├── config/
+│   ├── app-config.yaml       # Primary dynamic configuration file
 ├── README.md
 ├── docker-compose.yml
 ├── go.mod                    # Module definition
