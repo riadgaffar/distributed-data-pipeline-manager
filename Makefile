@@ -34,6 +34,12 @@ run: build docker-up
 	@echo "Running the application..."
 	cd $(WORK_DIR) && ./$(BIN_PATH)
 
+# Run the application with profiling
+.PHONY: run-profile
+run-profile: build docker-up
+	@echo "Running the application with profiling enabled..."
+	cd $(WORK_DIR) && ./$(BIN_PATH) -profile=true
+
 # Debug the application using Delve
 .PHONY: debug
 debug: build-debug

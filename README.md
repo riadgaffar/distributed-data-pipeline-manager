@@ -189,8 +189,8 @@ Project reset complete.
 **This uses runtime/pprof to programmatically collect profiles and will generate `cpu.pprof` and `mem.pprof` files. Run the following commands to generate visual CPU and Memory graphs.**
 
 ```bash
-go tool pprof -png ./bin/pipeline_manager cpu.pprof > cpu.png
-go tool pprof -png ./bin/pipeline_manager mem.pprof > mem.png
+go tool pprof -png ./bin/pipeline_manager cpu.pprof > ./docs/images/cpu.png
+go tool pprof -png ./bin/pipeline_manager mem.pprof > ./docs/images/mem.png
 ```
 ## CPU Graph:
 ![CPU Graph](docs/images/cpu.png)
