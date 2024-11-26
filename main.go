@@ -3,62 +3,131 @@ package main
 import (
 	"distributed-data-pipeline-manager/src/config"
 	"distributed-data-pipeline-manager/src/execute_pipeline"
+	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"runtime/pprof"
+	"syscall"
 )
 
+// Profiling files
+var cpuProfileFile *os.File
+var memProfileFile *os.File
+
 func main() {
-	// CPU Profiling
-	f, err := os.Create("cpu.pprof")
-	if err != nil {
-		panic(err)
+	// Command-line flags
+	jsonFilePath := flag.String("json-file", "messages.json", "Path to the JSON file for dynamic input")
+	configPath := flag.String("config", "pipelines/benthos/sample-pipeline.yaml", "Path to the pipeline configuration file")
+	profile := flag.Bool("profile", false, "Enable profiling")
+	flag.Parse()
+
+	log.Println("INFO: Distributed Data Pipeline Manager")
+
+	// Enable profiling if requested
+	if *profile {
+		enableCPUProfiling()
+		defer stopCPUProfiling()
+		defer writeMemoryProfile()
 	}
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
 
-	log.Println("Distributed Data Pipeline Manager")
+	// Capture termination signals for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Debug: Parsing pipeline configuration
-	fmt.Println("DEBUG: Parsing pipeline configuration...")
-	configPath := "pipelines/benthos/sample-pipeline.yaml"
-	fmt.Printf("DEBUG: Parsing pipeline configuration from: %s\n", configPath)
-	pipelineConfig, err := config.ParsePipelineConfig(configPath)
+	go func() {
+		<-sigChan
+		log.Println("INFO: Caught termination signal, shutting down...")
+		if *profile {
+			stopCPUProfiling()
+			writeMemoryProfile()
+		}
+		os.Exit(0)
+	}()
+
+	// Step 1: Parse the pipeline configuration
+	log.Printf("DEBUG: Parsing pipeline configuration from: %s\n", *configPath)
+	pipelineConfig, err := config.ParsePipelineConfig(*configPath)
 	if err != nil {
-		log.Fatalf("ERROR: Failed to parse pipeline: %v\n", err)
+		log.Fatalf("ERROR: Failed to parse pipeline configuration: %v\n", err)
 	}
-	fmt.Printf("DEBUG: Parsed input configuration: %+v\n", pipelineConfig.Input)
+	log.Printf("DEBUG: Parsed input configuration: %+v\n", pipelineConfig.Input)
 
-	// Debug: Starting producer
-	fmt.Println("DEBUG: Starting producer...")
-	// Extract required values from pipelineConfig
-	brokers := pipelineConfig.Input.Kafka.Addresses
-	topic := pipelineConfig.Input.Kafka.Topics
-
-	// Call ProduceMessages with the dynamically loaded configuration
-	err = producer.ProduceMessages(brokers, topic, 10) // Produce 10 messages
+	// Step 2: Read JSON file for input messages
+	log.Printf("DEBUG: Reading JSON file: %s\n", *jsonFilePath)
+	data, err := readJSONFile(*jsonFilePath)
 	if err != nil {
+		log.Fatalf("ERROR: Failed to read JSON file: %v\n", err)
+	}
+
+	// Step 3: Initialize the JSON parser
+	parser := &parsers.JSONParser{}
+
+	// Step 4: Start the producer
+	log.Println("DEBUG: Starting producer...")
+	brokers := pipelineConfig.Input.Kafka.Addresses // Use brokers from config
+	topics := pipelineConfig.Input.Kafka.Topics     // Use topics from config
+	count := 5                                      // Example limit on messages
+
+	if err := producer.ProduceMessages(brokers, topics, count, parser, data); err != nil {
 		log.Fatalf("ERROR: Failed to produce messages: %v\n", err)
-		os.Exit(1)
 	}
 
-	// Execute the pipeline
-	fmt.Println("DEBUG: Executing pipeline...")
+	// Step 5: Execute the pipeline
+	log.Println("DEBUG: Executing pipeline...")
 	executor := &execute_pipeline.RealCommandExecutor{} // Use the real command executor
-	err = execute_pipeline.ExecutePipeline(configPath, executor)
-	if err != nil {
+	if err := execute_pipeline.ExecutePipeline(*configPath, executor); err != nil {
 		log.Fatalf("ERROR: Pipeline execution failed: %v\n", err)
 	}
 
-	fmt.Println("Pipeline executed successfully.")
+	log.Println("INFO: Pipeline executed successfully.")
+}
 
-	// Memory Profiling
-	m, err := os.Create("mem.pprof")
+// enableCPUProfiling starts CPU profiling.
+func enableCPUProfiling() {
+	var err error
+	cpuProfileFile, err = os.Create("cpu.pprof")
 	if err != nil {
-		panic(err)
+		log.Fatalf("ERROR: Failed to create CPU profile: %v\n", err)
 	}
-	pprof.WriteHeapProfile(m)
-	m.Close()
+	pprof.StartCPUProfile(cpuProfileFile)
+	log.Println("DEBUG: CPU profiling enabled")
+}
+
+// stopCPUProfiling stops CPU profiling.
+func stopCPUProfiling() {
+	if cpuProfileFile != nil {
+		pprof.StopCPUProfile()
+		cpuProfileFile.Close()
+		log.Println("DEBUG: CPU profiling stopped")
+	}
+}
+
+// writeMemoryProfile writes the memory profile to a file.
+func writeMemoryProfile() {
+	var err error
+	memProfileFile, err = os.Create("mem.pprof")
+	if err != nil {
+		log.Printf("ERROR: Failed to create memory profile: %v\n", err)
+		return
+	}
+	defer memProfileFile.Close()
+
+	if err := pprof.WriteHeapProfile(memProfileFile); err != nil {
+		log.Printf("ERROR: Failed to write memory profile: %v", err)
+	} else {
+		log.Println("DEBUG: Memory profiling written to mem.pprof")
+	}
+}
+
+// readJSONFile reads and returns the contents of a JSON file.
+func readJSONFile(filePath string) ([]byte, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+	return data, nil
 }
