@@ -63,6 +63,7 @@ distributed-data-pipeline-manager/
 │   │   └── parsers_test.go           # Parsers Unit Tests
 │   │   └── parsers.go                # Parsers logic
 │   ├── producer/
+│   │   └── producer_test.go          # Producer Unit Tests
 │   │   └── producer.go               # Producer logic
 ├── docs/                             # images and project documentation
 └── tests/                            # e2e and integration tests

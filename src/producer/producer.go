@@ -8,18 +8,23 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
-func ProduceMessages(brokers []string, topics []string, count int, parser parsers.Parser, data []byte) error {
+// Producer defines an interface for producing messages.
+type Producer interface {
+	Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error
+	Close()
+}
+
+// KafkaProducer wraps the confluent-kafka-go producer to implement the Producer interface.
+type KafkaProducer struct {
+	producer *kafka.Producer
+}
+
+// NewKafkaProducer creates a new KafkaProducer.
+func NewKafkaProducer(brokers []string) (*KafkaProducer, error) {
 	if len(brokers) == 0 {
-		return fmt.Errorf("no brokers provided")
+		return nil, fmt.Errorf("no brokers provided")
 	}
 
-	// Step 1: Parse the data using the provided parser
-	messages, err := parser.Parse(data)
-	if err != nil {
-		return fmt.Errorf("failed to parse data: %v", err)
-	}
-
-	// Step 2: Initialize the producer
 	producer, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers":       brokers[0],
 		"security.protocol":       "PLAINTEXT",
@@ -28,13 +33,33 @@ func ProduceMessages(brokers []string, topics []string, count int, parser parser
 		"socket.keepalive.enable": true,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer producer.Close()
 
-	// Step 3: Produce parsed messages
+	return &KafkaProducer{producer: producer}, nil
+}
+
+// Produce sends a message to Kafka.
+func (kp *KafkaProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error {
+	return kp.producer.Produce(msg, deliveryChan)
+}
+
+// Close shuts down the Kafka producer.
+func (kp *KafkaProducer) Close() {
+	kp.producer.Close()
+}
+
+// ProduceMessages sends messages using the provided producer and parser.
+func ProduceMessages(producer Producer, topics []string, count int, parser parsers.Parser, data []byte) error {
+	// Step 1: Parse the data
+	messages, err := parser.Parse(data)
+	if err != nil {
+		return fmt.Errorf("failed to parse data: %w", err)
+	}
+
+	// Step 2: Produce each message
 	for i, message := range messages {
-		if i >= count { // Limit by count
+		if i >= count {
 			break
 		}
 
@@ -45,16 +70,13 @@ func ProduceMessages(brokers []string, topics []string, count int, parser parser
 		}, deliveryChan)
 
 		if err != nil {
-			fmt.Printf("Failed to produce message: %s\n", err)
-			close(deliveryChan)
-			continue
+			return fmt.Errorf("failed to produce message: %w", err)
 		}
 
-		// Wait for delivery report
 		e := <-deliveryChan
 		m := e.(*kafka.Message)
 		if m.TopicPartition.Error != nil {
-			fmt.Printf("Delivery failed: %v\n", m.TopicPartition.Error)
+			return fmt.Errorf("delivery error: %w", m.TopicPartition.Error)
 		}
 		close(deliveryChan)
 	}

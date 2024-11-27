@@ -56,11 +56,21 @@ func main() {
 		log.Fatalf("ERROR: Failed to parse JSON data: %v\n", err)
 	}
 
+	// Initialize Kafka producer
+	kafkaProducer, err := producer.NewKafkaProducer(cfg.App.Kafka.Brokers)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to initialize Kafka producer: %v\n", err)
+		os.Exit(1)
+	}
+	defer kafkaProducer.Close()
+
 	// Start producer
 	messageCount := len(messages)
 	log.Println("DEBUG: Starting producer...")
-	if err := producer.ProduceMessages(cfg.App.Kafka.Brokers, cfg.App.Kafka.Topics, messageCount, parser, data); err != nil {
-		log.Fatalf("ERROR: Failed to produce messages: %v\n", err)
+	err = producer.ProduceMessages(kafkaProducer, cfg.App.Kafka.Topics, messageCount, parser, data)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to produce messages: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Execute the pipeline
