@@ -1,0 +1,14 @@
+app:
+  profiling: false
+  source:
+    parser: "json"               # Supported parsers: json, avro, parquet
+    file: "messages.json"        # Path to the input file or source
+  kafka:
+    brokers: ["localhost:9092"]
+    topics: ["test-topic"]
+    consumer_group: "test-group"
+  postgres:
+    url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
+    table: "processed_data"
+  logger:
+    level: "INFO"

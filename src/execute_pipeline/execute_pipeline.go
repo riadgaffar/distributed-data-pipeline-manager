@@ -1,9 +1,11 @@
 package execute_pipeline
 
 import (
+	"distributed-data-pipeline-manager/src/config"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // CommandExecutor abstracts command execution for testability.
@@ -23,14 +25,65 @@ func (r *RealCommandExecutor) Execute(name string, args ...string) error {
 }
 
 // ExecutePipeline runs the pipeline using the provided CommandExecutor.
+// ExecutePipeline generates a dynamic pipeline configuration and runs it using rpk.
 func ExecutePipeline(configPath string, executor CommandExecutor) error {
-	fmt.Printf("DEBUG: Running pipeline from config: %s\n", configPath)
+	fmt.Printf("DEBUG: Generating pipeline configuration from: %s\n", configPath)
 
-	err := executor.Execute("rpk", "connect", "run", configPath)
+	// Path for the dynamically generated pipeline file
+	generatedPipelinePath := "pipelines/benthos/generated-pipeline.yaml"
+
+	// Generate the pipeline configuration
+	err := GeneratePipelineFile(configPath, generatedPipelinePath)
+	if err != nil {
+		return fmt.Errorf("failed to generate pipeline configuration: %w", err)
+	}
+	fmt.Printf("DEBUG: Generated pipeline configuration at: %s\n", generatedPipelinePath)
+
+	// Execute the pipeline using rpk
+	fmt.Printf("DEBUG: Running pipeline from config: %s\n", generatedPipelinePath)
+	err = executor.Execute("rpk", "connect", "run", generatedPipelinePath)
 	if err != nil {
 		return fmt.Errorf("failed to execute pipeline: %w", err)
 	}
 
 	fmt.Println("Pipeline executed successfully.")
+	return nil
+}
+
+// GeneratePipelineFile dynamically generates a pipeline configuration file.
+func GeneratePipelineFile(configPath string, outputPath string) error {
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	templateFilePath := "pipelines/benthos/pipeline.yaml"
+	template, err := os.ReadFile(templateFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read template pipeline file at %s: %w", templateFilePath, err)
+	}
+
+	pipeline := string(template)
+	placeholders := map[string]string{
+		"${KAFKA_BROKERS}":        strings.Join(cfg.App.Kafka.Brokers, ","),
+		"${KAFKA_TOPICS}":         strings.Join(cfg.App.Kafka.Topics, ","),
+		"${KAFKA_CONSUMER_GROUP}": cfg.App.Kafka.ConsumerGroup,
+		"${POSTGRES_URL}":         cfg.App.Postgres.URL,
+		"${POSTGRES_TABLE}":       cfg.App.Postgres.Table,
+		"${LOG_LEVEL}":            cfg.App.LoggerConfig.Level,
+	}
+
+	for placeholder, value := range placeholders {
+		if value == "" {
+			return fmt.Errorf("placeholder %s is not set in the configuration", placeholder)
+		}
+		pipeline = strings.ReplaceAll(pipeline, placeholder, value)
+	}
+
+	err = os.WriteFile(outputPath, []byte(pipeline), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write generated pipeline to %s: %w", outputPath, err)
+	}
+
 	return nil
 }

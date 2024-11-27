@@ -6,6 +6,7 @@ BIN_PATH := $(BIN_DIR)/$(APP_NAME)
 DOCKER_COMPOSE := docker-compose.yml
 POSTGRES_DATA := postgres-data
 REDPANDA_DATA := redpanda-data
+CONFIG_PATH=config/app-config.yaml
 WORK_DIR := $(shell dirname $(realpath main.go))
 
 # Default target
@@ -32,13 +33,13 @@ build-debug:
 .PHONY: run
 run: build docker-up
 	@echo "Running the application..."
-	cd $(WORK_DIR) && ./$(BIN_PATH)
+	cd $(WORK_DIR) && CONFIG_PATH=$(CONFIG_PATH) ./$(BIN_PATH)
 
 # Run the application with profiling
 .PHONY: run-profile
 run-profile: build docker-up
 	@echo "Running the application with profiling enabled..."
-	cd $(WORK_DIR) && ./$(BIN_PATH) -profile=true
+	cd $(WORK_DIR) && CONFIG_PATH=$(CONFIG_PATH) ./$(BIN_PATH) -profile=true
 
 # Debug the application using Delve
 .PHONY: debug
@@ -79,9 +80,15 @@ rm-kafka-topics:
 	@echo "Deleting all Kafka topics..."
 	rpk topic list | awk 'NR>1 {print $$1}' | xargs -I {} rpk topic delete {}
 
+# Remove generated pipeline config
+.PHONY: rm-generated-pipeline-config
+rm-generated-pipeline-config:
+	@echo "Removing generated pipeline files..."
+	rm -f pipelines/benthos/generated-pipeline.yaml
+
 # Full reset (clean + docker down)
 .PHONY: reset
-reset: clean docker-down rm-kafka-topics data-clean
+reset: clean docker-down rm-kafka-topics data-clean rm-generated-pipeline-config
 	@echo "Project reset complete."
 
 # Debug target to print paths and environment info
