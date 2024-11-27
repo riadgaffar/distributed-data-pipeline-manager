@@ -37,14 +37,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Prometheus PushGateway service
-  prometheus-pushgateway:
-    image: prom/pushgateway
-    container_name: prometheus-pushgateway
-    ports:
-      - "9091:9091"
-    restart: unless-stopped
-
 volumes:
   postgres-data:
   redpanda-data:

@@ -1,98 +1,125 @@
-# Project Description
-The intent is to build a tool that allows users to create, manage, and monitor data pipelines using a distributed system by integrating it with popular messaging and streaming systems like Kafka and/or Redpanda.
+# **Distributed Data Pipeline Manager**
 
-# License
-Distributed Data Pipeline Manager is licensed under the MIT License. See the LICENSE file for details.
+A modern, flexible tool for managing distributed data pipelines using Kafka, Redpanda, Postgres, and dynamic configuration. The application supports message ingestion, transformation, and routing through customizable configurations.
+
+---
+
+## **Features**
+
+- Dynamic configuration with YAML (pipeline setup) and JSON (message sources).
+- Kafka/Redpanda for messaging and Postgres for storage.
+- Customizable processing using mappings and transformations.
+- Logging and profiling for monitoring performance.
+- Health check and metrics endpoints for system observability.
+
+---
+
+## **Getting Started**
+
+### Prerequisites
+
+- **Docker**: Install Docker and Docker Compose.
+- **Kafka CLI Tools**: Install Redpanda’s CLI (`rpk`).
+  `brew install redpanda-data/tap/redpanda`
+- **Go**: Install Go (v1.20 or later).  
+- **YAML Validator**: Install `yamllint` for validating YAML files.
+  `brew install yamllint`
+
+### Clone the Repository
+
+```zsh
+git clone https://github.com/your-username/distributed-data-pipeline-manager.git
+cd distributed-data-pipeline-manager
+```
+
+---
 
 # Project structure
 ```bash
 distributed-data-pipeline-manager/
+├── config/
+│   ├── app-config.yaml               # Primary dynamic configuration file
 ├── README.md
 ├── docker-compose.yml
-├── go.mod                    # Module definition
+├── go.mod                            # Module definition
 ├── go.sum
-├── main.go                   # Entry point
+├── main.go                           # Entry point
 ├── pipelines/
 │   └── benthos/
-│       └── sample-pipeline.yaml
+│       └── pipeline.yaml
 ├── src/
 |   ├── config/
-│   │   └── config.go           # Configuration logic
+│   │   └── config_test.go            # Configuration Unit Tests
+│   │   └── config.go                 # Configuration logic
 │   ├── consumer/
-│   │   └── consumer.go         # Consumer logic
+│   │   └── consumer_interface.go     # Consumer Interface
+│   │   └── consumer_test.go          # Consumer Unit Tests
+│   │   └── consumer.go               # Consumer logic
 |   ├── execute_pipeline/
-│   │   └── execute_pipeline.go # Pipeline Execution logic
+│   │   └── execute_pipeline_test.go  # Pipeline Execution Unit Tests
+│   │   └── execute_pipeline.go       # Pipeline Execution logic
+|   ├── parsers/
+│   │   └── json_parser.go            # JSON Parser logic
+│   │   └── parsers_test.go           # Parsers Unit Tests
+│   │   └── parsers.go                # Parsers logic
 │   ├── producer/
-│   │   └── producer.go         # Producer logic
-├── docs/
-└── tests/                      # e2e and integration tests
+│   │   └── producer_test.go          # Producer Unit Tests
+│   │   └── producer.go               # Producer logic
+├── docs/                             # images and project documentation
+└── tests/                            # e2e and integration tests
 ```
+
+---
 
 # Setup
 
-## Install rpk (Redpanda CLI Tool)
+## Configuration
 
-```bash
-brew install redpanda-data/tap/redpanda
+The application uses dynamic configurations for customizing the pipeline behavior. Configurations are stored in a YAML file.
+
+**Example Configuration File (app-config.yaml)**
+```yaml
+app:
+  profiling: false
+  source:
+    parser: "json"
+    file: "messages.json"
+  kafka:
+    brokers:
+      - "localhost:9092"
+    topics:
+      - "test-topic"
+    consumer_group: "test-group"
+  postgres:
+    url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
+    table: "processed_data"
+  logger:
+    level: "DEBUG"
 ```
 
-Specify the broker addresses directly when running an rpk command by using the -X brokers flag. For example:
+1.	Save this configuration as config/app-config.yaml.
+2.	Set the CONFIG_PATH environment variable:
 
-```bash
-rpk cluster info -X brokers=localhost:9092
+```zsh
+export CONFIG_PATH=config/app-config.yaml
 ```
 
-Set the RPK_BROKERS environment variable to define the broker addresses for your session:
-
-```bash
-export RPK_BROKERS="localhost:9092"
+**Example JSON Source File (messages.json)**
+```json
+{
+  "messages": [
+    "Message from JSON 1",
+    "Message from JSON 2",
+    "Message from JSON 3",
+    "Message from JSON 4",
+    "Message from JSON 5",
+    "Message from JSON 6",
+    "Message from JSON 7"
+  ]
+}
 ```
 
-## Test Redpanda Setup
-
-### Set rpk Configuration
-
-```bash
-rpk config set redpanda.brokers localhost:9092  
-```
-
-### Create a Topic
-
-```bash
-rpk topic create test-topic
-rpk topic list
-```
-
-### Produce and Consume Messages
-
-**Produce Messages**
-
-```bash
-rpk topic produce test-topic
-```
-
-**Consume Messages**
-
-```bash
-rpk topic consume test-topic
-```
-
-## Troubleshooting
-
-- If rpk cannot connect to Redpanda, ensure that the docker-compose.yml correctly exposes port 9092 and that the container is running.
-- Use the docker logs command to check for errors:
-
-```bash
-docker logs <redpanda-container-id>
-```
-
-# Profiling
-
-**Prerequisite: `graphviz`**
-
-```bash
-brew install graphviz
-```
+---
 
 # Running Tests
 
@@ -100,90 +127,120 @@ brew install graphviz
 make test
 ```
 
-# Running Pipeline
+---
 
-```bash
+# Running the Application
+
+## Steps to Run
+
+**1.	Build and Start Services:**
+Use the Makefile to build and run the application with Docker Compose:
+
+```zsh
 make run
-Building the application...
-mkdir -p bin
-cd /dev/sandbox/go/distributed-data-pipeline-manager && go build -o bin/pipeline_manager main.go
-Build complete: bin/pipeline_manager
-Starting Docker Compose services...
-docker compose -f docker-compose.yml up -d
-[+] Running 4/4
- ✔ Network distributed-data-pipeline-manager_default       Created                                                                                                           0.0s 
- ✔ Container postgres-container                            Started                                                                                                           0.2s 
- ✔ Container distributed-data-pipeline-manager-redpanda-1  Started                                                                                                           0.2s 
- ✔ Container prometheus-pushgateway                        Started                                                                                                           0.2s 
-Running the application...
-cd /dev/sandbox/go/distributed-data-pipeline-manager && ./bin/pipeline_manager
-2024/11/19 20:14:21 Distributed Data Pipeline Manager
-DEBUG: Parsing pipeline configuration...
-DEBUG: Parsing pipeline configuration from: pipelines/benthos/sample-pipeline.yaml
-DEBUG: Parsed input configuration: {Kafka:{Addresses:[localhost:9092] Topics:[test-topic] ConsumerGroup:test-group}}
-DEBUG: Starting producer...
-DEBUG: Executing pipeline...
-DEBUG: Running pipeline from config: pipelines/benthos/sample-pipeline.yaml
-INFO Running main config from specified file       @service=redpanda-connect benthos_version=4.39.0 path=pipelines/benthos/sample-pipeline.yaml
-INFO Listening for HTTP requests at: http://0.0.0.0:4195  @service=redpanda-connect
-INFO Input type kafka is now active                @service=redpanda-connect label="" path=root.input
-DEBU Starting consumer group                       @service=redpanda-connect label="" path=root.input
-INFO Output type stdout is now active              @service=redpanda-connect label="" path=root.output.broker.outputs.2
-INFO Launching a Redpanda Connect instance, use CTRL+C to close  @service=redpanda-connect
-INFO Output type sql_insert is now active          @service=redpanda-connect label="" path=root.output.broker.outputs.0
-INFO Output type kafka is now active               @service=redpanda-connect label="" path=root.output.broker.outputs.1
-DEBU Consuming messages from topic 'test-topic' partition '0'  @service=redpanda-connect label="" path=root.input
-{"data":"TUVTU0FHRSAx","id":"fd705eaa-ca22-4a10-ba6f-4ca14a6fc298","timestamp":"2024-11-19T20:14:22.463069-05:00"}
-{"data":"TUVTU0FHRSAw","id":"03121794-55a1-4058-9969-1a4c6356c194","timestamp":"2024-11-19T20:14:22.463065-05:00"}
-{"data":"TUVTU0FHRSA4","id":"aa94293b-6987-42b5-9e69-ddcfe6d3a959","timestamp":"2024-11-19T20:14:22.46422-05:00"}
-{"data":"TUVTU0FHRSAy","id":"2170587f-49b9-464a-81ec-e3dc30f09142","timestamp":"2024-11-19T20:14:22.463095-05:00"}
-{"data":"TUVTU0FHRSAz","id":"97f77299-6436-4054-a545-61f6c475f271","timestamp":"2024-11-19T20:14:22.4631-05:00"}
-{"data":"TUVTU0FHRSA5","id":"786ca91b-c6f5-453a-b1fe-b603c21703d2","timestamp":"2024-11-19T20:14:22.464246-05:00"}
-{"data":"TUVTU0FHRSA0","id":"a2666f18-6245-47eb-b0c2-9cdb581976d4","timestamp":"2024-11-19T20:14:22.463116-05:00"}
-{"data":"TUVTU0FHRSA1","id":"fe74a9c9-ad57-4317-8f0f-2636a6ca62f1","timestamp":"2024-11-19T20:14:22.463137-05:00"}
-{"data":"TUVTU0FHRSA2","id":"ab659b78-3fc9-46d3-9385-bdd5935ce597","timestamp":"2024-11-19T20:14:22.463157-05:00"}
-{"data":"TUVTU0FHRSA3","id":"02ec20de-d418-4217-aa28-0c6667a34e20","timestamp":"2024-11-19T20:14:22.463163-05:00"}
 ```
 
-# Stopping
+**2.	Monitor Logs:**
+Verify the logs to confirm pipeline execution:
 
-```bash
-^CINFO Received SIGINT, the service is closing       @service=redpanda-connect
-DEBU Waiting for pending acks to resolve before shutting down.  @service=redpanda-connect label="" path=root.input
-DEBU Pending acks resolved.                        @service=redpanda-connect label="" path=root.input
-DEBU Waiting for topic consumers to close.         @service=redpanda-connect label="" path=root.input
-DEBU Stopped consuming messages from topic 'test-topic' partition '0'  @service=redpanda-connect label="" path=root.input
-make: *** [run] Interrupt: 2
-
-DEBU Closing consumer group                        @service=redpanda-connect label="" path=root.input                                                                             
-DEBU Topic consumers are closed.                   @service=redpanda-connect label="" path=root.input
+```plaintext
+INFO: Distributed Data Pipeline Manager
+INFO: Loaded configuration: {...}
 ```
 
-# Project Reset
+**3.	Shutdown:**
+Use CTRL+C to gracefully stop the application. Profiling data will be saved if enabled.
 
-**Note:** This will delete all binary and data directories.
+**4.	Clean Up:**
+Use make reset to stop services and clean up containers:
 
-```bash
+```zsh
 make reset
-Cleaning up build artifacts...
-rm -rf bin
-Binary clean complete.
-Stopping and removing all containers...
-docker compose -f docker-compose.yml down -v
-[+] Running 4/4
- ✔ Container distributed-data-pipeline-manager-redpanda-1  Removed                                                                                                           0.2s 
- ✔ Container prometheus-pushgateway                        Removed                                                                                                           0.1s 
- ✔ Container postgres-container                            Removed                                                                                                           0.1s 
- ✔ Network distributed-data-pipeline-manager_default       Removed                                                                                                           0.1s 
-Deleting all Kafka topics...
-rpk topic list | awk 'NR>1 {print $1}' | xargs -I {} rpk topic delete {}
-unable to request metadata: unable to dial: dial tcp 127.0.0.1:9092: connect: connection refused
-Cleaning up data artifacts...
-rm -rf postgres-data
-rm -rf redpanda-data
-Data clean complete.
-Project reset complete.
+```
 
+## Pipeline Workflow
+
+### Overview
+
+The data pipeline follows this workflow:
+
+```plaintext
+Source (JSON) → Kafka → Processors → Outputs (Postgres, Kafka, Logs)
+```
+
+**Example Pipeline Configuration (Generated at Runtime)**
+```yaml
+# Input section: Consumes data from Kafka
+input:
+  kafka:
+    addresses: ["localhost:9092"]
+    topics: ["test-topic"]
+    consumer_group: "test-group"
+    checkpoint_limit: 1000
+
+# Pipeline section: Processes and transforms data
+pipeline:
+  processors:
+    - mapping: |
+        root.id = uuid_v4()
+        root.timestamp = now()
+        root.data = content().uppercase()
+
+# Output section: Routes data to multiple destinations
+output:
+  broker:
+    outputs:
+      - sql_insert:
+          driver: postgres
+          dsn: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
+          table: "processed_data"
+          columns: ["id", "timestamp", "data"]
+          args_mapping: |
+            root = [
+              this.id,
+              this.timestamp,
+              this.data
+            ]
+          max_in_flight: 5
+
+      - kafka:
+          addresses: ["localhost:9092"]
+          topic: "failed-messages"
+          compression: gzip
+
+      - stdout:
+          codec: lines
+```
+
+---
+
+# Profiling
+
+Profiling helps monitor performance by generating CPU and memory usage data.
+
+## Enabling Profiling
+
+	•	Enable Profiling: Set profiling: true in app-config.yaml.
+	•	Run the Application: Profiling data is generated when the app exits (cpu.pprof, mem.pprof).
+
+## Analyzing Profiling Data
+
+```zsh
+go tool pprof -http=:8080 cpu.pprof
+```
+
+## Monitoring
+
+The application provides the following endpoints:
+	•	**Health Check:** http://localhost:4195/health
+	•	**Metrics:** http://localhost:4195/metrics
+
+For metrics aggregation, set up Prometheus PushGateway.
+
+**Prerequisite: `graphviz`**
+
+```bash
+brew install graphviz
 ```
 
 **This uses runtime/pprof to programmatically collect profiles and will generate `cpu.pprof` and `mem.pprof` files. Run the following commands to generate visual CPU and Memory graphs.**
@@ -192,9 +249,43 @@ Project reset complete.
 go tool pprof -png ./bin/pipeline_manager cpu.pprof > ./docs/images/cpu.png
 go tool pprof -png ./bin/pipeline_manager mem.pprof > ./docs/images/mem.png
 ```
+
 ## CPU Graph:
 ![CPU Graph](docs/images/cpu.png)
 
 ## Memory Graph:
 
 ![Memory Graph](docs/images/mem.png)
+
+---
+
+# Troubleshooting
+
+## Common Issues
+
+1.	**Configuration Errors:**
+    - Ensure CONFIG_PATH is set correctly.
+    - Validate YAML syntax using yamllint.
+
+2.	**Kafka or Postgres Connection Issues:**
+    - Confirm services are running and accessible.
+    - Verify the kafka.brokers and postgres.url settings.
+
+3.	**No Messages Processed:**
+    - Ensure the JSON file path in the configuration is correct.
+    - Check Kafka logs for errors.
+
+4.	**Metrics Not Visible:**
+    - Ensure Prometheus PushGateway is running on port 9091.
+
+---
+
+# Contributing
+
+Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request for review.
+
+---
+
+# License
+
+Distributed Data Pipeline Manager is licensed under the MIT License. See the LICENSE file for details.

@@ -1,0 +1,54 @@
+# Input section: Consumes data from Kafka
+input:
+  kafka:
+    addresses: ["${KAFKA_BROKERS}"]
+    topics: ["${KAFKA_TOPICS}"]
+    consumer_group: "${KAFKA_CONSUMER_GROUP}"
+
+# Pipeline section: Processes and transforms data
+pipeline:
+  processors:
+    - mapping: |
+        root.id = uuid_v4()
+        root.timestamp = now()
+        root.data = content().uppercase()
+    - switch:
+        - check: "\"${LOG_LEVEL}\" == \"DEBUG\""
+          processors:
+            - log:
+                level: DEBUG
+                message: 'Inserting record into SQL: ${! json() }'
+
+# Output section: Routes data to multiple destinations
+output:
+  broker:
+    outputs:
+      - retry:
+          max_retries: 3
+          backoff:
+            initial_interval: 500ms
+          output:
+            sql_insert:
+              driver: postgres
+              dsn: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
+              table: "processed_data"
+              columns: ["id", "timestamp", "data"]
+              args_mapping: |
+                root = [
+                  this.id,
+                  this.timestamp,
+                  this.data
+                ]
+              max_in_flight: 1
+
+      - kafka:
+          addresses: ["localhost:9092"]
+          topic: "failed-messages"
+          compression: gzip
+
+      - stdout:
+          codec: lines
+
+# Logger section: Controls logging verbosity
+logger:
+  level: "${LOG_LEVEL}"

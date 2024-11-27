@@ -5,89 +5,114 @@ import (
 	"distributed-data-pipeline-manager/src/execute_pipeline"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
-	"flag"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"runtime/pprof"
 	"syscall"
+
+	"github.com/sirupsen/logrus"
 )
 
-// Profiling files
 var cpuProfileFile *os.File
-var memProfileFile *os.File
 
 func main() {
-	// Command-line flags
-	jsonFilePath := flag.String("json-file", "messages.json", "Path to the JSON file for dynamic input")
-	configPath := flag.String("config", "pipelines/benthos/sample-pipeline.yaml", "Path to the pipeline configuration file")
-	profile := flag.Bool("profile", false, "Enable profiling")
-	flag.Parse()
-
 	log.Println("INFO: Distributed Data Pipeline Manager")
 
-	// Enable profiling if requested
-	if *profile {
-		enableCPUProfiling()
-		defer stopCPUProfiling()
-		defer writeMemoryProfile()
+	// Load configuration
+	cfg, err := loadConfig()
+	if err != nil {
+		log.Fatalf("ERROR: %v\n", err)
+	}
+
+	// Set logging level
+	setLogLevel(cfg.App.LoggerConfig.Level)
+
+	// Enable profiling if configured
+	if cfg.App.Profiling {
+		defer enableProfiling()()
 	}
 
 	// Capture termination signals for graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	setupSignalHandler()
 
-	go func() {
-		<-sigChan
-		log.Println("INFO: Caught termination signal, shutting down...")
-		if *profile {
-			stopCPUProfiling()
-			writeMemoryProfile()
-		}
-		os.Exit(0)
-	}()
-
-	// Step 1: Parse the pipeline configuration
-	log.Printf("DEBUG: Parsing pipeline configuration from: %s\n", *configPath)
-	pipelineConfig, err := config.ParsePipelineConfig(*configPath)
+	// Initialize the parser
+	parser, err := initializeParser(cfg.App.Source.Parser)
 	if err != nil {
-		log.Fatalf("ERROR: Failed to parse pipeline configuration: %v\n", err)
-	}
-	log.Printf("DEBUG: Parsed input configuration: %+v\n", pipelineConfig.Input)
-
-	// Step 2: Read JSON file for input messages
-	log.Printf("DEBUG: Reading JSON file: %s\n", *jsonFilePath)
-	data, err := readJSONFile(*jsonFilePath)
-	if err != nil {
-		log.Fatalf("ERROR: Failed to read JSON file: %v\n", err)
+		log.Fatalf("ERROR: %v\n", err)
 	}
 
-	// Step 3: Initialize the JSON parser
-	parser := &parsers.JSONParser{}
+	// Read source data
+	data, err := readSourceData(cfg.App.Source.File)
+	if err != nil {
+		log.Fatalf("ERROR: Failed to read source file: %v\n", err)
+	}
 
-	// Step 4: Start the producer
+	// Parse JSON data with support for mixed formats
+	messages, err := ParseMessages(data)
+	if err != nil {
+		log.Fatalf("ERROR: Failed to parse JSON data: %v\n", err)
+	}
+
+	// Initialize Kafka producer
+	kafkaProducer, err := producer.NewKafkaProducer(cfg.App.Kafka.Brokers)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to initialize Kafka producer: %v\n", err)
+		os.Exit(1)
+	}
+	defer kafkaProducer.Close()
+
+	// Start producer
+	messageCount := len(messages)
 	log.Println("DEBUG: Starting producer...")
-	brokers := pipelineConfig.Input.Kafka.Addresses // Use brokers from config
-	topics := pipelineConfig.Input.Kafka.Topics     // Use topics from config
-	count := 5                                      // Example limit on messages
-
-	if err := producer.ProduceMessages(brokers, topics, count, parser, data); err != nil {
-		log.Fatalf("ERROR: Failed to produce messages: %v\n", err)
+	err = producer.ProduceMessages(kafkaProducer, cfg.App.Kafka.Topics, messageCount, parser, data)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to produce messages: %v\n", err)
+		os.Exit(1)
 	}
 
-	// Step 5: Execute the pipeline
+	// Execute the pipeline
 	log.Println("DEBUG: Executing pipeline...")
-	executor := &execute_pipeline.RealCommandExecutor{} // Use the real command executor
-	if err := execute_pipeline.ExecutePipeline(*configPath, executor); err != nil {
+	executor := &execute_pipeline.RealCommandExecutor{}
+	if err := execute_pipeline.ExecutePipeline(os.Getenv("CONFIG_PATH"), executor); err != nil {
 		log.Fatalf("ERROR: Pipeline execution failed: %v\n", err)
 	}
 
 	log.Println("INFO: Pipeline executed successfully.")
 }
 
-// enableCPUProfiling starts CPU profiling.
-func enableCPUProfiling() {
+// loadConfig loads the configuration from CONFIG_PATH
+func loadConfig() (*config.AppConfig, error) {
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		return nil, fmt.Errorf("CONFIG_PATH environment variable is not set")
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	log.Printf("INFO: Loaded configuration: %+v\n", cfg)
+	return cfg, nil
+}
+
+// setLogLevel sets the log level based on configuration
+func setLogLevel(level string) {
+	logrus.Printf("DEBUG: Received log level: '%s'", level)
+
+	logLevel, err := logrus.ParseLevel(level)
+	if err != nil {
+		logrus.Printf("WARN: Invalid log level '%s', defaulting to INFO\n", level)
+		logLevel = logrus.InfoLevel
+	}
+	logrus.SetLevel(logLevel)
+}
+
+// enableProfiling enables CPU and memory profiling
+func enableProfiling() func() {
 	var err error
 	cpuProfileFile, err = os.Create("cpu.pprof")
 	if err != nil {
@@ -95,21 +120,20 @@ func enableCPUProfiling() {
 	}
 	pprof.StartCPUProfile(cpuProfileFile)
 	log.Println("DEBUG: CPU profiling enabled")
-}
 
-// stopCPUProfiling stops CPU profiling.
-func stopCPUProfiling() {
-	if cpuProfileFile != nil {
+	return func() {
 		pprof.StopCPUProfile()
-		cpuProfileFile.Close()
+		if cpuProfileFile != nil {
+			cpuProfileFile.Close()
+		}
 		log.Println("DEBUG: CPU profiling stopped")
+		writeMemoryProfile()
 	}
 }
 
-// writeMemoryProfile writes the memory profile to a file.
+// writeMemoryProfile writes the memory profile to a file
 func writeMemoryProfile() {
-	var err error
-	memProfileFile, err = os.Create("mem.pprof")
+	memProfileFile, err := os.Create("mem.pprof")
 	if err != nil {
 		log.Printf("ERROR: Failed to create memory profile: %v\n", err)
 		return
@@ -117,17 +141,76 @@ func writeMemoryProfile() {
 	defer memProfileFile.Close()
 
 	if err := pprof.WriteHeapProfile(memProfileFile); err != nil {
-		log.Printf("ERROR: Failed to write memory profile: %v", err)
+		log.Printf("ERROR: Failed to write memory profile: %v\n", err)
 	} else {
 		log.Println("DEBUG: Memory profiling written to mem.pprof")
 	}
 }
 
-// readJSONFile reads and returns the contents of a JSON file.
-func readJSONFile(filePath string) ([]byte, error) {
+// setupSignalHandler captures termination signals for graceful shutdown
+func setupSignalHandler() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		log.Println("INFO: Caught termination signal, shutting down...")
+		os.Exit(0)
+	}()
+}
+
+// initializeParser creates a parser based on the provided type
+func initializeParser(parserType string) (parsers.Parser, error) {
+	switch parserType {
+	case "json":
+		return &parsers.JSONParser{}, nil
+	case "avro":
+		return nil, fmt.Errorf("parser type '%s' is not yet implemented", parserType)
+	case "parquet":
+		return nil, fmt.Errorf("parser type '%s' is not yet implemented", parserType)
+	default:
+		return nil, fmt.Errorf("unsupported parser type: '%s'", parserType)
+	}
+}
+
+// readSourceData reads and returns the contents of a source file
+func readSourceData(filePath string) ([]byte, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", filePath, err)
+		return nil, fmt.Errorf("failed to read source file %s: %w", filePath, err)
 	}
 	return data, nil
+}
+
+// ParseMessages parses JSON data with support for mixed formats
+// ParseMessages parses JSON data with support for mixed formats
+func ParseMessages(data []byte) ([]string, error) {
+	var result []string
+
+	// Try parsing as an object with a "messages" field
+	var objectWithMessages struct {
+		Messages []string `json:"messages"`
+	}
+	if err := json.Unmarshal(data, &objectWithMessages); err == nil && len(objectWithMessages.Messages) > 0 {
+		result = objectWithMessages.Messages
+		return result, nil
+	}
+
+	// Try parsing as an array of strings
+	var arrayOfStrings []string
+	if err := json.Unmarshal(data, &arrayOfStrings); err == nil {
+		result = arrayOfStrings
+		return result, nil
+	}
+
+	// Try parsing as a single object (fallback for single item cases)
+	var singleMessage map[string]interface{}
+	if err := json.Unmarshal(data, &singleMessage); err == nil {
+		// Optionally process the single object and decide on the representation
+		singleMessageJSON, _ := json.Marshal(singleMessage)
+		result = []string{string(singleMessageJSON)}
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("unsupported JSON format: %s", string(data))
 }

@@ -4,7 +4,7 @@
       {
           "label": "Start Docker Services",
           "type": "shell",
-          "command": "docker-compose up -d",
+          "command": "docker compose up -d",
           "isBackground": true,
           "problemMatcher": {
               "pattern": {
