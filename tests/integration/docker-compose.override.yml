@@ -1,0 +1,33 @@
+services:
+  test-postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./tests/postgres-data:/var/lib/postgresql/data
+
+  test-redpanda:
+    image: docker.redpanda.com/vectorized/redpanda:latest
+    command: 
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --advertise-kafka-addr=PLAINTEXT://localhost:29092
+    ports:
+      - "29092:9092"
+
+  test-pipeline-manager:
+    build:
+      context: .
+    environment:
+      CONFIG_PATH: config/test-app-config.yaml
+    depends_on:
+      - test-postgres
+      - test-redpanda

@@ -66,7 +66,17 @@ distributed-data-pipeline-manager/
 │   │   └── producer_test.go          # Producer Unit Tests
 │   │   └── producer.go               # Producer logic
 ├── docs/                             # images and project documentation
-└── tests/                            # e2e and integration tests
+│── tests/                            # e2e and integration tests
+│   |── integration/
+│   │   ├── docker-compose.override.yml  # Integration test-specific Docker Compose
+│   │   ├── integration_test.go          # Go test file for integration tests
+│   │   ├── helpers.go                   # Optional: Shared helper functions for integration tests
+│   │   ├── configs/
+│   │   │   ├── test-app-config.yaml     # Config file specific to integration testing
+│   │   │   └── other-configs.yaml       # Optional: Additional configs, if needed
+│   │   └── data/
+│   │       ├── test-messages.json       # Example JSON files for test data
+│   │       └── other-test-data.json     # Optional: Additional test data
 ```
 
 ---
