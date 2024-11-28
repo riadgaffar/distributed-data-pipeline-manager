@@ -27,13 +27,18 @@ func (r *RealCommandExecutor) Execute(name string, args ...string) error {
 // ExecutePipeline runs the pipeline using the provided CommandExecutor.
 // ExecutePipeline generates a dynamic pipeline configuration and runs it using rpk.
 func ExecutePipeline(configPath string, executor CommandExecutor) error {
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
 	fmt.Printf("DEBUG: Generating pipeline configuration from: %s\n", configPath)
 
 	// Path for the dynamically generated pipeline file
-	generatedPipelinePath := "pipelines/benthos/generated-pipeline.yaml"
+	generatedPipelinePath := cfg.App.PipelineTemplatePath + "generated-pipeline.yaml"
 
 	// Generate the pipeline configuration
-	err := GeneratePipelineFile(configPath, generatedPipelinePath)
+	err = GeneratePipelineFile(configPath, generatedPipelinePath)
 	if err != nil {
 		return fmt.Errorf("failed to generate pipeline configuration: %w", err)
 	}
@@ -57,7 +62,12 @@ func GeneratePipelineFile(configPath string, outputPath string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	templateFilePath := "pipelines/benthos/pipeline.yaml"
+	templateFilePath := cfg.App.PipelineTemplatePath + "pipeline.yaml"
+	if templateFilePath == "" {
+		return fmt.Errorf("pipeline template file path is not defined in the configuration")
+	}
+
+	fmt.Printf("DEBUG: Template file path: %s\n", templateFilePath)
 	template, err := os.ReadFile(templateFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read template pipeline file at %s: %w", templateFilePath, err)

@@ -1,5 +1,6 @@
 app:
   profiling: false
+  pipeline_template_path: "pipelines/benthos/"
   source:
     parser: "json"               # Supported parsers: json, avro, parquet
     file: "messages.json"        # Path to the input file or source

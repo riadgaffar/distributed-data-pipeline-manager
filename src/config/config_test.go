@@ -13,8 +13,9 @@ import (
 func mockAppConfig() *AppConfig {
 	return &AppConfig{
 		App: struct {
-			Profiling bool `yaml:"profiling"`
-			Source    struct {
+			Profiling            bool   `yaml:"profiling"`
+			PipelineTemplatePath string `yaml:"pipeline_template_path"`
+			Source               struct {
 				Parser string `yaml:"parser"`
 				File   string `yaml:"file"`
 			} `yaml:"source"`
@@ -31,7 +32,8 @@ func mockAppConfig() *AppConfig {
 				Level string `yaml:"level"`
 			} `yaml:"logger"`
 		}{
-			Profiling: false,
+			Profiling:            false,
+			PipelineTemplatePath: "pipelines/benthos/",
 			Source: struct {
 				Parser string `yaml:"parser"`
 				File   string `yaml:"file"`
@@ -109,6 +111,9 @@ func TestLoadConfig_Success(t *testing.T) {
 	}
 	if config.App.LoggerConfig.Level != mockConfig.App.LoggerConfig.Level {
 		t.Errorf("expected Logger Level %s, got %s", mockConfig.App.LoggerConfig.Level, config.App.LoggerConfig.Level)
+	}
+	if config.App.PipelineTemplatePath != mockConfig.App.PipelineTemplatePath {
+		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.PipelineTemplatePath, config.App.PipelineTemplatePath)
 	}
 }
 
