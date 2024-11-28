@@ -5,9 +5,12 @@ BIN_DIR := bin
 BIN_PATH := $(BIN_DIR)/$(APP_NAME)
 DOCKER_COMPOSE := docker-compose.yml
 POSTGRES_DATA := postgres-data
+IT_POSTGRES_DATA := tests/integration/postgres-data
 REDPANDA_DATA := redpanda-data
+IT_REDPANDA_DATA := tests/integration/redpanda-data
 CONFIG_PATH=config/app-config.yaml
 WORK_DIR := $(shell dirname $(realpath main.go))
+COMPOSE_FILES := -f docker-compose.yml -f ./tests/integration/docker-compose.override.yml
 
 # Default target
 .PHONY: all
@@ -59,12 +62,21 @@ docker-down:
 	@echo "Stopping and removing all containers..."
 	docker compose -f $(DOCKER_COMPOSE) down -v
 
+# Clean Docker Build Cache
+.PHONY: docker-clean-cache
+docker-clean-cache:
+	@echo "Cleaning docker build cache..."
+	docker builder prune -f
+	@echo "Docker build cache clean complete."
+
 # Clean up data artifacts
 .PHONY: data-clean
 data-clean:
 	@echo "Cleaning up data artifacts..."
 	rm -rf $(POSTGRES_DATA)
 	rm -rf $(REDPANDA_DATA)
+	rm -fr $(IT_POSTGRES_DATA)
+	rm -fr $(IT_REDPANDA_DATA)
 	@echo "Data clean complete."
 
 # Clean up build artifacts
@@ -73,6 +85,13 @@ clean:
 	@echo "Cleaning up build artifacts..."
 	rm -rf $(BIN_DIR)
 	@echo "Binary clean complete."
+
+# Clean up integration test containers and volumes
+.PHONY: integration-clean
+integration-clean:
+	@echo "Stopping and cleaning up integration test containers and volumes..."
+	docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	@echo "Integration test environment cleaned up."
 
 # Remove all Kafka topics
 .PHONY: rm-kafka-topics
@@ -88,7 +107,7 @@ rm-generated-pipeline-config:
 
 # Full reset (clean + docker down)
 .PHONY: reset
-reset: clean docker-down rm-kafka-topics data-clean rm-generated-pipeline-config
+reset: clean docker-clean-cache docker-down rm-kafka-topics data-clean rm-generated-pipeline-config integration-clean
 	@echo "Project reset complete."
 
 # Debug target to print paths and environment info
@@ -98,6 +117,18 @@ debug-info:
 	@echo "Binary path: $(BIN_PATH)"
 	@echo "Source directory: $(SRC_DIR)"
 	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
+
+# .PHONY: integration-test
+# integration-test:
+# 	@echo "Running integration tests..."
+# 	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
+# 	docker compose --profile testing -f tests/integration/docker-compose.override.yml up -d
+# 	docker compose -f tests/integration/docker-compose.override.yml logs -f &
+# 	@echo "Waiting for services to become ready..."
+# 	@docker compose -f tests/integration/docker-compose.override.yml wait test-pipeline-manager || (echo "Services failed to become ready" && exit 1)
+# 	@docker compose -f tests/integration/docker-compose.override.yml exec test-pipeline-manager go test -v ./tests/integration/...
+# 	@docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+# 	@echo "Integration tests completed successfully."
 
 # Run Go tests
 .PHONY: test

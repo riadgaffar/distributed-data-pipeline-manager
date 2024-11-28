@@ -69,6 +69,7 @@ distributed-data-pipeline-manager/
 │── tests/                            # e2e and integration tests
 │   |── integration/
 │   │   ├── docker-compose.override.yml  # Integration test-specific Docker Compose
+│   │   ├── Dockerfile                   # Definition of the IT build image for the service
 │   │   ├── integration_test.go          # Go test file for integration tests
 │   │   ├── helpers.go                   # Optional: Shared helper functions for integration tests
 │   │   ├── configs/
@@ -76,7 +77,6 @@ distributed-data-pipeline-manager/
 │   │   │   └── other-configs.yaml       # Optional: Additional configs, if needed
 │   │   └── data/
 │   │       ├── test-messages.json       # Example JSON files for test data
-│   │       └── other-test-data.json     # Optional: Additional test data
 ```
 
 ---

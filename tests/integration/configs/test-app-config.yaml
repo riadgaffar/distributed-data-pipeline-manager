@@ -1,0 +1,16 @@
+app:
+  profiling: false
+  source:
+    parser: json
+    file: /app/data/test-messages.json
+  kafka:
+    brokers:
+      - localhost:29092
+    topics:
+      - test-topic
+    consumer_group: test-group
+  postgres:
+    url: postgresql://test_user:test_pass@localhost:5433/test_db?sslmode=disable
+    table: processed_data
+  logger:
+    level: "INFO"
