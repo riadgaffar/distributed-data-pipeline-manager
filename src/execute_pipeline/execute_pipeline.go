@@ -35,7 +35,7 @@ func ExecutePipeline(configPath string, executor CommandExecutor) error {
 	fmt.Printf("DEBUG: Generating pipeline configuration from: %s\n", configPath)
 
 	// Path for the dynamically generated pipeline file
-	generatedPipelinePath := cfg.App.PipelineTemplatePath + "generated-pipeline.yaml"
+	generatedPipelinePath := cfg.App.GeneratePipelineConfig
 
 	// Generate the pipeline configuration
 	err = GeneratePipelineFile(configPath, generatedPipelinePath)
@@ -62,7 +62,7 @@ func GeneratePipelineFile(configPath string, outputPath string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	templateFilePath := cfg.App.PipelineTemplatePath + "pipeline.yaml"
+	templateFilePath := cfg.App.PipelineTemplate
 	if templateFilePath == "" {
 		return fmt.Errorf("pipeline template file path is not defined in the configuration")
 	}

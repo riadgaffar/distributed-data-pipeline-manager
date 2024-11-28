@@ -32,7 +32,8 @@ func setupTestEnv(t *testing.T, configPath, templatePath string) {
 	testConfig := `
 app:
   profiling: false
-  pipeline_template_path: pipelines/benthos/
+  pipeline_template: pipelines/benthos/pipeline.yaml
+  generated_pipeline_config: pipelines/benthos/generated-pipeline.yaml
   kafka:
     brokers: ["localhost:9092"]
     topics: ["test-topic"]
@@ -154,7 +155,8 @@ func TestGeneratePipelineFile_MissingPlaceholder(t *testing.T) {
 	testConfig := `
 app:
   profiling: false
-  pipeline_template_path: pipelines/benthos/
+  pipeline_template: pipelines/benthos/pipeline.yaml
+  generated_pipeline_config: pipelines/benthos/generated-pipeline.yaml
   kafka:
     brokers: ["localhost:9092"]
     consumer_group: "test-group"

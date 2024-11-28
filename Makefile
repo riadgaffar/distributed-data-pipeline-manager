@@ -104,6 +104,7 @@ rm-kafka-topics:
 rm-generated-pipeline-config:
 	@echo "Removing generated pipeline files..."
 	rm -f pipelines/benthos/generated-pipeline.yaml
+	rm -f tests/integration/pipelines/test-generated-pipeline.yaml
 
 # Full reset (clean + docker down)
 .PHONY: reset
@@ -118,17 +119,17 @@ debug-info:
 	@echo "Source directory: $(SRC_DIR)"
 	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
 
-# .PHONY: integration-test
-# integration-test:
-# 	@echo "Running integration tests..."
-# 	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
-# 	docker compose --profile testing -f tests/integration/docker-compose.override.yml up -d
-# 	docker compose -f tests/integration/docker-compose.override.yml logs -f &
-# 	@echo "Waiting for services to become ready..."
-# 	@docker compose -f tests/integration/docker-compose.override.yml wait test-pipeline-manager || (echo "Services failed to become ready" && exit 1)
-# 	@docker compose -f tests/integration/docker-compose.override.yml exec test-pipeline-manager go test -v ./tests/integration/...
-# 	@docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
-# 	@echo "Integration tests completed successfully."
+.PHONY: integration-test
+integration-test:
+	@echo "Running integration tests..."
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml up -d
+	@echo "Waiting for services to become ready..."
+	docker compose -f tests/integration/docker-compose.override.yml logs -f
+	@docker compose -f tests/integration/docker-compose.override.yml wait test-pipeline-manager || (echo "Services failed to become ready" && exit 1)
+	@docker compose -f tests/integration/docker-compose.override.yml exec test-pipeline-manager go test -v ./tests/integration/...
+	@docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	@echo "Integration tests completed successfully."
 
 # Run Go tests
 .PHONY: test

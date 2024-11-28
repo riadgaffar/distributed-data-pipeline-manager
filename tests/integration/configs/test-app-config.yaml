@@ -1,16 +1,16 @@
 app:
   profiling: false
+  pipeline_template: "../../tests/integration/pipelines/test-pipeline.yaml"
+  generated_pipeline_config: "../../tests/integration/pipelines/test-generated-pipeline.yaml"
   source:
     parser: json
     file: /app/data/test-messages.json
   kafka:
-    brokers:
-      - localhost:29092
-    topics:
-      - test-topic
-    consumer_group: test-group
+    brokers: ["test-redpanda:29092"]
+    topics: ["test-topic"]
+    consumer_group: "test-group"
   postgres:
-    url: postgresql://test_user:test_pass@localhost:5433/test_db?sslmode=disable
+    url: postgresql://test_user:test_pass@integration-test-postgres-1:5432/test_db?sslmode=disable
     table: processed_data
   logger:
-    level: "INFO"
+    level: "DEBUG"

@@ -11,6 +11,16 @@ RUN apt-get update && apt-get install -y \
     librdkafka-dev \
     wget
 
+# Install rpk
+# Add Redpanda repository and install Redpanda
+RUN curl -1sLf \
+    'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash.deb.sh' | bash && \
+    apt-get update && \
+    apt-get install -y redpanda
+    
+RUN rpk --version
+
+
 # Set up the Go application
 WORKDIR /app
 COPY . .

@@ -10,9 +10,10 @@ import (
 // AppConfig defines the structure for dynamic configuration
 type AppConfig struct {
 	App struct {
-		Profiling            bool   `yaml:"profiling"`
-		PipelineTemplatePath string `yaml:"pipeline_template_path"`
-		Source               struct {
+		Profiling              bool   `yaml:"profiling"`
+		PipelineTemplate       string `yaml:"pipeline_template"`
+		GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
+		Source                 struct {
 			Parser string `yaml:"parser"`
 			File   string `yaml:"file"`
 		} `yaml:"source"`

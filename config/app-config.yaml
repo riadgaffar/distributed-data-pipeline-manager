@@ -1,13 +1,14 @@
 app:
   profiling: false
-  pipeline_template_path: "pipelines/benthos/"
+  pipeline_template: "pipelines/benthos/pipeline.yaml"
+  generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
   source:
     parser: "json"               # Supported parsers: json, avro, parquet
     file: "messages.json"        # Path to the input file or source
   kafka:
     brokers: ["localhost:9092"]
-    topics: ["test-topic"]
-    consumer_group: "test-group"
+    topics: ["pipeline-topic"]
+    consumer_group: "pipeline-group"
   postgres:
     url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
     table: "processed_data"

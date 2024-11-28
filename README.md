@@ -35,7 +35,7 @@ cd distributed-data-pipeline-manager
 ---
 
 # Project structure
-```bash
+```plaintext
 distributed-data-pipeline-manager/
 ├── config/
 │   ├── app-config.yaml               # Primary dynamic configuration file
@@ -68,15 +68,17 @@ distributed-data-pipeline-manager/
 ├── docs/                             # images and project documentation
 │── tests/                            # e2e and integration tests
 │   |── integration/
+│   │   ├── configs/                     # Integration test pipeline config
+│   │   │   └── test-app-config.yaml     # Config file specific to integration testing
+│   │   ├── pipelines/
+│   │   │   └── test-pipeline.yaml       # Integration test dynamic pipeline generator template
+│   │   └── test_data/
+│   │   │   └── test-messages.json       # Example JSON files for test data
 │   │   ├── docker-compose.override.yml  # Integration test-specific Docker Compose
 │   │   ├── Dockerfile                   # Definition of the IT build image for the service
+│   │   ├── helpers.go                   # Shared helper functions for integration tests
 │   │   ├── integration_test.go          # Go test file for integration tests
-│   │   ├── helpers.go                   # Optional: Shared helper functions for integration tests
-│   │   ├── configs/
-│   │   │   ├── test-app-config.yaml     # Config file specific to integration testing
-│   │   │   └── other-configs.yaml       # Optional: Additional configs, if needed
-│   │   └── data/
-│   │       ├── test-messages.json       # Example JSON files for test data
+
 ```
 
 ---

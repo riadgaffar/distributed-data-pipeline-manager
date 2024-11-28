@@ -13,9 +13,10 @@ import (
 func mockAppConfig() *AppConfig {
 	return &AppConfig{
 		App: struct {
-			Profiling            bool   `yaml:"profiling"`
-			PipelineTemplatePath string `yaml:"pipeline_template_path"`
-			Source               struct {
+			Profiling              bool   `yaml:"profiling"`
+			PipelineTemplate       string `yaml:"pipeline_template"`
+			GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
+			Source                 struct {
 				Parser string `yaml:"parser"`
 				File   string `yaml:"file"`
 			} `yaml:"source"`
@@ -32,8 +33,9 @@ func mockAppConfig() *AppConfig {
 				Level string `yaml:"level"`
 			} `yaml:"logger"`
 		}{
-			Profiling:            false,
-			PipelineTemplatePath: "pipelines/benthos/",
+			Profiling:              false,
+			PipelineTemplate:       "pipelines/benthos/pipeline.yaml",
+			GeneratePipelineConfig: "pipelines/benthos/generated-pipeline.yaml",
 			Source: struct {
 				Parser string `yaml:"parser"`
 				File   string `yaml:"file"`
@@ -112,8 +114,11 @@ func TestLoadConfig_Success(t *testing.T) {
 	if config.App.LoggerConfig.Level != mockConfig.App.LoggerConfig.Level {
 		t.Errorf("expected Logger Level %s, got %s", mockConfig.App.LoggerConfig.Level, config.App.LoggerConfig.Level)
 	}
-	if config.App.PipelineTemplatePath != mockConfig.App.PipelineTemplatePath {
-		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.PipelineTemplatePath, config.App.PipelineTemplatePath)
+	if config.App.PipelineTemplate != mockConfig.App.PipelineTemplate {
+		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.PipelineTemplate, config.App.PipelineTemplate)
+	}
+	if config.App.GeneratePipelineConfig != mockConfig.App.GeneratePipelineConfig {
+		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.GeneratePipelineConfig, config.App.GeneratePipelineConfig)
 	}
 }
 
