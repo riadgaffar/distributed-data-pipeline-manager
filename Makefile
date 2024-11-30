@@ -11,6 +11,7 @@ IT_REDPANDA_DATA := tests/integration/redpanda-data
 CONFIG_PATH=config/app-config.yaml
 WORK_DIR := $(shell dirname $(realpath main.go))
 COMPOSE_FILES := -f docker-compose.yml -f ./tests/integration/docker-compose.override.yml
+TEST_DIRS := $(shell go list ./... | grep -v 'tests/integration')
 
 # Default target
 .PHONY: all
@@ -60,7 +61,7 @@ docker-up:
 .PHONY: docker-down
 docker-down:
 	@echo "Stopping and removing all containers..."
-	docker compose -f $(DOCKER_COMPOSE) down -v
+	docker compose $(COMPOSE_FILES) down -v
 
 # Clean Docker Build Cache
 .PHONY: docker-clean-cache
@@ -91,6 +92,9 @@ clean:
 integration-clean:
 	@echo "Stopping and cleaning up integration test containers and volumes..."
 	docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	@if [ -n "$$(docker ps -aq --filter 'status=exited')" ]; then \
+		docker rm $$(docker ps -aq --filter 'status=exited'); \
+	fi
 	@echo "Integration test environment cleaned up."
 
 # Remove all Kafka topics
@@ -122,18 +126,20 @@ debug-info:
 .PHONY: integration-test
 integration-test:
 	@echo "Running integration tests..."
+	# Build the Docker images for integration testing
 	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml up -d
-	@echo "Waiting for services to become ready..."
-	docker compose -f tests/integration/docker-compose.override.yml logs -f
-	@docker compose -f tests/integration/docker-compose.override.yml wait test-pipeline-manager || (echo "Services failed to become ready" && exit 1)
-	@docker compose -f tests/integration/docker-compose.override.yml exec test-pipeline-manager go test -v ./tests/integration/...
-	@docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	
+	# Start the containers and run the tests, exiting with the code of test-pipeline-manager
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml up --exit-code-from test-pipeline-manager
+	
+	# Capture logs (optional)
+	docker compose -f tests/integration/docker-compose.override.yml logs
+	
 	@echo "Integration tests completed successfully."
 
 # Run Go tests
 .PHONY: test
 test:
-	@echo "Running tests..."
-	cd $(WORK_DIR) && go test -v ./...
+	@echo "Running unit tests..."
+	cd $(WORK_DIR) && go test -v $(TEST_DIRS)
 	@echo "Test run complete."

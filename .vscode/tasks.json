@@ -37,6 +37,22 @@
               "kind": "test",
               "isDefault": true
           }
-      }
+      },
+      {
+        "label": "Integration Test",
+        "type": "shell",
+        "command": "make integration-test",
+        "group": {
+            "kind": "build",
+            "isDefault": true
+        },
+        "problemMatcher": [],
+        "options": {
+            "env": {
+                "INTEGRATION_TEST_MODE": "true",
+                "CONFIG_PATH": "${workspaceFolder}/tests/integration/configs/test-app-config.yaml"
+            }
+        }
+    }
   ]
 }

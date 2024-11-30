@@ -1,16 +1,16 @@
 # **Distributed Data Pipeline Manager**
 
-A modern, flexible tool for managing distributed data pipelines using Kafka, Redpanda, Postgres, and dynamic configuration. The application supports message ingestion, transformation, and routing through customizable configurations.
+The Distributed Data Pipeline Manager is a robust tool for managing, orchestrating, and monitoring data pipelines. It integrates with Redpanda (Kafka alternative), processes messages using Benthos, and outputs results to PostgreSQL. This tool includes dynamic configuration support, profiling, and integration testing capabilities.
 
 ---
 
 ## **Features**
 
-- Dynamic configuration with YAML (pipeline setup) and JSON (message sources).
-- Kafka/Redpanda for messaging and Postgres for storage.
-- Customizable processing using mappings and transformations.
-- Logging and profiling for monitoring performance.
-- Health check and metrics endpoints for system observability.
+- **Dynamic Pipeline Configuration**: Define pipelines with support for multiple input, processing, and output stages.
+- **Orchestration**: Use an orchestrator for seamless pipeline management with dynamic configuration and timeout support.
+- **Profiling**: Built-in CPU and memory profiling for performance analysis.
+- **Integration Testing**: Dedicated integration test framework with environment variable control.
+- **Monitoring and Logging**: Integrated health checks, Prometheus metrics, and configurable logging.
 
 ---
 
@@ -18,19 +18,12 @@ A modern, flexible tool for managing distributed data pipelines using Kafka, Red
 
 ### Prerequisites
 
-- **Docker**: Install Docker and Docker Compose.
-- **Kafka CLI Tools**: Install Redpanda’s CLI (`rpk`).
+- **Go** (version 1.22 or later)
+- **Docker** (with Docker Compose)
+- **Redpanda CLI (`rpk`)**
   `brew install redpanda-data/tap/redpanda`
-- **Go**: Install Go (v1.20 or later).  
 - **YAML Validator**: Install `yamllint` for validating YAML files.
   `brew install yamllint`
-
-### Clone the Repository
-
-```zsh
-git clone https://github.com/your-username/distributed-data-pipeline-manager.git
-cd distributed-data-pipeline-manager
-```
 
 ---
 
@@ -58,6 +51,8 @@ distributed-data-pipeline-manager/
 |   ├── execute_pipeline/
 │   │   └── execute_pipeline_test.go  # Pipeline Execution Unit Tests
 │   │   └── execute_pipeline.go       # Pipeline Execution logic
+|   ├── orchestrator/
+│   │   └── orchestrator.go           # Pipeline lifecycle logic to manage setup, execution, monitoring, and shutdown.
 |   ├── parsers/
 │   │   └── json_parser.go            # JSON Parser logic
 │   │   └── parsers_test.go           # Parsers Unit Tests
@@ -85,28 +80,42 @@ distributed-data-pipeline-manager/
 
 # Setup
 
+### Clone the Repository
+
+```zsh
+git clone https://github.com/your-username/distributed-data-pipeline-manager.git
+cd distributed-data-pipeline-manager
+```
+
+### Install Dependencies
+
+```zsh
+go mod tidy
+```
+
 ## Configuration
 
-The application uses dynamic configurations for customizing the pipeline behavior. Configurations are stored in a YAML file.
+The application is configured using an environment variable, CONFIG_PATH, which points to a dynamic configuration file (app-config.yaml). Example:
 
 **Example Configuration File (app-config.yaml)**
 ```yaml
 app:
   profiling: false
+  pipeline_template: "pipelines/benthos/pipeline.yaml"
+  generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
   source:
-    parser: "json"
-    file: "messages.json"
+    parser: "json"               # Supported parsers: json, avro, parquet
+    file: "data/input.json"      # Path to the input file or source
   kafka:
-    brokers:
-      - "localhost:9092"
-    topics:
-      - "test-topic"
-    consumer_group: "test-group"
+    brokers: ["localhost:9092"]
+    topics: ["pipeline-topic"]
+    consumer_group: "pipeline-group"
   postgres:
     url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
     table: "processed_data"
   logger:
     level: "DEBUG"
+
 ```
 
 1.	Save this configuration as config/app-config.yaml.
@@ -131,12 +140,41 @@ export CONFIG_PATH=config/app-config.yaml
 }
 ```
 
+### Orchestrator
+
+The orchestrator coordinates the pipeline execution. It dynamically adjusts based on the environment:
+
+	- Integration Test Mode: Controlled by the INTEGRATION_TEST_MODE environment variable.
+
+	- Timeout Support: Automatically stops the pipeline after a defined duration in test mode.
+
+Orchestrator Usage in Code
+
+```go
+isTesting := os.Getenv("INTEGRATION_TEST_MODE") == "true"
+timeout := 0 * time.Second
+if isTesting {
+    timeout = 30 * time.Second // Adjust for integration tests
+}
+orchestrator := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, isTesting, timeout)
+
+if err := orchestrator.Run(); err != nil {
+    log.Fatalf("ERROR: Orchestrator encountered an issue: %v\n", err)
+}
+```
+
 ---
 
-# Running Tests
+# Unit Tests
 
-```bash
+```zsh
 make test
+```
+
+# Integration Tests
+
+```zsh
+make integration-build
 ```
 
 ---
@@ -251,13 +289,13 @@ For metrics aggregation, set up Prometheus PushGateway.
 
 **Prerequisite: `graphviz`**
 
-```bash
+```zsh
 brew install graphviz
 ```
 
 **This uses runtime/pprof to programmatically collect profiles and will generate `cpu.pprof` and `mem.pprof` files. Run the following commands to generate visual CPU and Memory graphs.**
 
-```bash
+```zsh
 go tool pprof -png ./bin/pipeline_manager cpu.pprof > ./docs/images/cpu.png
 go tool pprof -png ./bin/pipeline_manager mem.pprof > ./docs/images/mem.png
 ```

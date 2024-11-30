@@ -16,7 +16,7 @@ pipeline:
         - check: "\"${LOG_LEVEL}\" == \"DEBUG\""
           processors:
             - log:
-                level: DEBUG
+                level: "${LOG_LEVEL}"
                 message: 'Inserting record into SQL: ${! json() }'
 
 # Output section: Routes data to multiple destinations

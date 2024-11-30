@@ -13,4 +13,4 @@ app:
     url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
     table: "processed_data"
   logger:
-    level: "INFO"
+    level: "DEBUG"

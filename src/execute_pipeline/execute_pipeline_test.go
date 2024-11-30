@@ -1,24 +1,31 @@
 package execute_pipeline
 
 import (
+	"log"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 type MockCommandExecutor struct {
-	mock.Mock
+	Commands []string
+	Stopped  bool
 }
 
-func (m *MockCommandExecutor) Execute(name string, args ...string) error {
-	args_interface := make([]interface{}, len(args)+1)
-	args_interface[0] = name
-	for i, arg := range args {
-		args_interface[i+1] = arg
-	}
-	return m.Called(args_interface...).Error(0)
+// Mock implementation of the ExecuteCommand method
+func (m *MockCommandExecutor) ExecuteCommand(name string, args ...string) error {
+	command := name + " " + strings.Join(args, " ")
+	m.Commands = append(m.Commands, command)
+	log.Printf("MockCommandExecutor: Command executed: %s", command)
+	return nil
+}
+
+func (m *MockCommandExecutor) StopPipeline() error {
+	m.Stopped = true
+	log.Println("Mock: Pipeline stopped.")
+	return nil
 }
 
 func setupTestEnv(t *testing.T, configPath, templatePath string) {
@@ -85,32 +92,31 @@ func cleanupTestEnv(t *testing.T) {
 }
 
 func TestExecutePipeline(t *testing.T) {
-	// Setup paths
+	// Setup paths for test files
 	configPath := "testdata/config.yaml"
 	templatePath := "pipelines/benthos/pipeline.yaml"
 	generatedPipelinePath := "pipelines/benthos/generated-pipeline.yaml"
 
-	// Mock executor
+	// Create a mock executor to simulate command execution
 	mockExecutor := new(MockCommandExecutor)
 
-	// Setup test environment
+	// Setup test environment (directories and files)
 	setupTestEnv(t, configPath, templatePath)
+	defer cleanupTestEnv(t) // Cleanup after test
 
-	// Mock rpk execution
-	mockExecutor.On("Execute", "rpk", "connect", "run", generatedPipelinePath).Return(nil)
-
-	// Execute the pipeline
+	// Execute the pipeline using the mock executor
 	err := ExecutePipeline(configPath, mockExecutor)
 
 	// Assertions
 	assert.NoError(t, err, "ExecutePipeline should not return an error")
-	mockExecutor.AssertExpectations(t)
 
-	// Verify generated pipeline file
+	// Verify expectations on the mocked executor
+	assert.Equal(t, 1, len(mockExecutor.Commands), "Mock executor should execute exactly one command")
+	assert.Contains(t, mockExecutor.Commands[0], "rpk connect run", "Command should contain the expected 'rpk connect run'")
+	assert.Contains(t, mockExecutor.Commands[0], generatedPipelinePath, "Command should use the generated pipeline path")
+
+	// Validate the generated pipeline configuration file
 	validateGeneratedPipeline(t, generatedPipelinePath)
-
-	// Cleanup
-	cleanupTestEnv(t)
 }
 
 func TestGeneratePipelineFile(t *testing.T) {

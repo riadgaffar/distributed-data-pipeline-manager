@@ -50,6 +50,7 @@ services:
       dockerfile: tests/integration/Dockerfile
     environment:
       CONFIG_PATH: /app/config.yaml
+      INTEGRATION_TEST_MODE: true
     volumes:
       - ../../pipelines:/app/pipelines
       - ../../tests/integration/configs:/app/configs
