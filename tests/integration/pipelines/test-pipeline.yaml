@@ -16,39 +16,37 @@ pipeline:
         - check: "\"${LOG_LEVEL}\" == \"DEBUG\""
           processors:
             - log:
-                level: DEBUG
+                level: "${LOG_LEVEL}"
                 message: 'Inserting record into SQL: ${! json() }'
 
 # Output section: Routes data to multiple destinations
 output:
-  broker:
-    outputs:
-      - retry:
-          max_retries: 3
-          backoff:
-            initial_interval: 500ms
-          output:
-            sql_insert:
-              driver: postgres
-              dsn: "${POSTGRES_URL}"
-              table: "${POSTGRES_TABLE}"
-              columns: ["id", "timestamp", "data"]
-              args_mapping: |
-                root = [
-                  this.id,
-                  this.timestamp,
-                  this.data
-                ]
-              suffix: ON CONFLICT (data) DO NOTHING
-              max_in_flight: 1
+  fallback:
+    - retry:
+        max_retries: 3
+        backoff:
+          initial_interval: 500ms
+        output:
+          sql_insert:
+            driver: postgres
+            dsn: "${POSTGRES_URL}"
+            table: "${POSTGRES_TABLE}"
+            columns: ["id", "timestamp", "data"]
+            args_mapping: |
+              root = [
+                this.id,
+                this.timestamp,
+                this.data
+              ]
+            suffix: ON CONFLICT (data) DO NOTHING
+            max_in_flight: 1
 
-      - kafka:
-          addresses: ["${KAFKA_BROKERS}"]
-          topic: "failed-messages"
-          compression: gzip
+    - redpanda:
+        seed_brokers: ["${KAFKA_BROKERS}"]
+        topic: "failed-messages"
+        compression: gzip
 
-      - stdout:
-          codec: lines
+    - stdout: {}
 
 # Logger section: Controls logging verbosity
 logger:
