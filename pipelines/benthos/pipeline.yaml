@@ -30,8 +30,8 @@ output:
           output:
             sql_insert:
               driver: postgres
-              dsn: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
-              table: "processed_data"
+              dsn: "${POSTGRES_URL}"
+              table: "${POSTGRES_TABLE}"
               columns: ["id", "timestamp", "data"]
               args_mapping: |
                 root = [
@@ -39,10 +39,11 @@ output:
                   this.timestamp,
                   this.data
                 ]
+              suffix: ON CONFLICT (data) DO NOTHING
               max_in_flight: 1
 
       - kafka:
-          addresses: ["localhost:9092"]
+          addresses: ["${KAFKA_BROKERS}"]
           topic: "failed-messages"
           compression: gzip
 

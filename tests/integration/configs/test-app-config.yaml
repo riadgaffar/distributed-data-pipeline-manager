@@ -10,7 +10,7 @@ app:
     topics: ["test-topic"]
     consumer_group: "test-group"
   postgres:
-    url: postgresql://test_user:test_pass@integration-test-postgres-1:5432/test_db?sslmode=disable
+    url: "postgresql://test_user:test_pass@integration-test-postgres-1:5432/test_db?sslmode=disable"
     table: processed_data
   logger:
     level: "DEBUG"

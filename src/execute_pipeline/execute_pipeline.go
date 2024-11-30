@@ -30,8 +30,8 @@ type RealCommandExecutor struct {
 
 func (r *RealCommandExecutor) ExecuteCommand(name string, args ...string) error {
 	r.cmd = exec.Command(name, args...)
-	r.cmd.Stdout = nil
-	r.cmd.Stderr = nil
+	r.cmd.Stdout = os.Stdout
+	r.cmd.Stderr = os.Stderr
 
 	if err := r.cmd.Start(); err != nil {
 		return err
