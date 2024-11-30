@@ -26,7 +26,7 @@ type AppConfig struct {
 			URL   string `yaml:"url"`
 			Table string `yaml:"table"`
 		} `yaml:"postgres"`
-		LoggerConfig struct {
+		Logger struct {
 			Level string `yaml:"level"`
 		} `yaml:"logger"`
 	} `yaml:"app"`

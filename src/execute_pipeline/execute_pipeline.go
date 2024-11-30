@@ -96,7 +96,7 @@ func GeneratePipelineFile(configPath string, outputPath string) error {
 		"${KAFKA_CONSUMER_GROUP}": cfg.App.Kafka.ConsumerGroup,
 		"${POSTGRES_URL}":         cfg.App.Postgres.URL,
 		"${POSTGRES_TABLE}":       cfg.App.Postgres.Table,
-		"${LOG_LEVEL}":            cfg.App.LoggerConfig.Level,
+		"${LOG_LEVEL}":            cfg.App.Logger.Level,
 	}
 
 	for placeholder, value := range placeholders {

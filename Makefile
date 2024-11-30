@@ -85,6 +85,9 @@ data-clean:
 clean:
 	@echo "Cleaning up build artifacts..."
 	rm -rf $(BIN_DIR)
+	go clean -cache 
+	go clean -modcache 
+	go clean -testcache
 	@echo "Binary clean complete."
 
 # Clean up integration test containers and volumes

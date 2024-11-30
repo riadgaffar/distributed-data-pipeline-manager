@@ -30,7 +30,7 @@ func main() {
 	}
 
 	// Set logging level
-	setLogLevel(cfg.App.LoggerConfig.Level)
+	setLogLevel(cfg.App.Logger.Level)
 
 	// Enable profiling if configured
 	if cfg.App.Profiling {

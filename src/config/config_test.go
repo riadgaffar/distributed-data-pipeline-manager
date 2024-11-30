@@ -29,7 +29,7 @@ func mockAppConfig() *AppConfig {
 				URL   string `yaml:"url"`
 				Table string `yaml:"table"`
 			} `yaml:"postgres"`
-			LoggerConfig struct {
+			Logger struct {
 				Level string `yaml:"level"`
 			} `yaml:"logger"`
 		}{
@@ -59,7 +59,7 @@ func mockAppConfig() *AppConfig {
 				URL:   "postgresql://user:password@localhost:5432/test_db?sslmode=disable",
 				Table: "test_table",
 			},
-			LoggerConfig: struct {
+			Logger: struct {
 				Level string `yaml:"level"`
 			}{
 				Level: "DEBUG",
@@ -111,8 +111,8 @@ func TestLoadConfig_Success(t *testing.T) {
 	if config.App.Postgres.Table != mockConfig.App.Postgres.Table {
 		t.Errorf("expected Postgres Table %s, got %s", mockConfig.App.Postgres.Table, config.App.Postgres.Table)
 	}
-	if config.App.LoggerConfig.Level != mockConfig.App.LoggerConfig.Level {
-		t.Errorf("expected Logger Level %s, got %s", mockConfig.App.LoggerConfig.Level, config.App.LoggerConfig.Level)
+	if config.App.Logger.Level != mockConfig.App.Logger.Level {
+		t.Errorf("expected Logger Level %s, got %s", mockConfig.App.Logger.Level, config.App.Logger.Level)
 	}
 	if config.App.PipelineTemplate != mockConfig.App.PipelineTemplate {
 		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.PipelineTemplate, config.App.PipelineTemplate)
