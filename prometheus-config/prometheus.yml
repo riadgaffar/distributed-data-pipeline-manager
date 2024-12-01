@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s  # Frequency of scraping metrics
+
+scrape_configs:
+  - job_name: 'kafka_to_postgres'
+    static_configs:
+      - targets: ['host.docker.internal:4195']
+    metrics_path: '/metrics'
+
+  - job_name: 'redpanda'
+    static_configs:
+      - targets: ['redpanda:9644']
