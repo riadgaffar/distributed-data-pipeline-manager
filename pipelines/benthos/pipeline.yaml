@@ -18,6 +18,24 @@ pipeline:
             - log:
                 level: "${LOG_LEVEL}"
                 message: 'Inserting record into SQL: ${! json() }'
+    # Count all incoming messages
+    - metric:
+        type: counter
+        name: kafka_postgres_messages_total
+        value: "1"
+        labels:
+          service: "redpanda"
+          pipeline: "kafka_to_postgres"
+    
+    # Count dropped messages (when insert fails)
+    - catch:
+        - metric:
+            type: counter
+            name: kafka_postgres_messages_dropped
+            value: "1"
+            labels:
+              service: "redpanda"
+              pipeline: "kafka_to_postgres"
 
 # Output section: Routes data to multiple destinations
 output:
@@ -51,3 +69,11 @@ output:
 # Logger section: Controls logging verbosity
 logger:
   level: "${LOG_LEVEL}"
+
+# Metrics section: Exposes metrics directly via HTTP
+http:
+  address: "127.0.0.1:4195"
+
+metrics:
+  prometheus:
+    use_histogram_timing: true
