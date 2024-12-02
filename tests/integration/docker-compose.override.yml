@@ -1,0 +1,64 @@
+services:
+  test-postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_pass
+      POSTGRES_DB: test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ../../init-scripts:/docker-entrypoint-initdb.d/
+    profiles:
+      - testing
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  test-redpanda:
+    image: docker.redpanda.com/vectorized/redpanda:latest
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --node-id 0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:29092
+      - --advertise-kafka-addr=PLAINTEXT://test-redpanda:29092
+    volumes:
+      - ./redpanda-data:/var/lib/redpanda/data
+    ports:
+      - "29092:29092"
+    profiles:
+      - testing
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  test-pipeline-manager:
+    build:
+      context: ../../  # Set to the project root
+      dockerfile: tests/integration/Dockerfile
+    environment:
+      CONFIG_PATH: /app/config.yaml
+      INTEGRATION_TEST_MODE: true
+    volumes:
+      - ../../pipelines:/app/pipelines
+      - ../../tests/integration/configs:/app/configs
+      - ../../tests/integration/test_data:/app/data
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-redpanda:
+        condition: service_healthy
+    profiles:
+      - testing

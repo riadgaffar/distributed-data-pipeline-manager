@@ -5,9 +5,13 @@ BIN_DIR := bin
 BIN_PATH := $(BIN_DIR)/$(APP_NAME)
 DOCKER_COMPOSE := docker-compose.yml
 POSTGRES_DATA := postgres-data
+IT_POSTGRES_DATA := tests/integration/postgres-data
 REDPANDA_DATA := redpanda-data
-CONFIG_PATH=config/app-config.yaml
+IT_REDPANDA_DATA := tests/integration/redpanda-data
+CONFIG_PATH := config/app-config.yaml
 WORK_DIR := $(shell dirname $(realpath main.go))
+COMPOSE_FILES := -f docker-compose.yml -f ./tests/integration/docker-compose.override.yml
+TEST_DIRS := $(shell go list ./... | grep -v 'tests/integration')
 
 # Default target
 .PHONY: all
@@ -57,7 +61,14 @@ docker-up:
 .PHONY: docker-down
 docker-down:
 	@echo "Stopping and removing all containers..."
-	docker compose -f $(DOCKER_COMPOSE) down -v
+	docker compose $(COMPOSE_FILES) down -v
+
+# Clean Docker Build Cache
+.PHONY: docker-clean-cache
+docker-clean-cache:
+	@echo "Cleaning docker build cache..."
+	docker builder prune -f
+	@echo "Docker build cache clean complete."
 
 # Clean up data artifacts
 .PHONY: data-clean
@@ -65,6 +76,8 @@ data-clean:
 	@echo "Cleaning up data artifacts..."
 	rm -rf $(POSTGRES_DATA)
 	rm -rf $(REDPANDA_DATA)
+	rm -fr $(IT_POSTGRES_DATA)
+	rm -fr $(IT_REDPANDA_DATA)
 	@echo "Data clean complete."
 
 # Clean up build artifacts
@@ -72,7 +85,20 @@ data-clean:
 clean:
 	@echo "Cleaning up build artifacts..."
 	rm -rf $(BIN_DIR)
+	go clean -cache 
+	go clean -modcache 
+	go clean -testcache
 	@echo "Binary clean complete."
+
+# Clean up integration test containers and volumes
+.PHONY: integration-clean
+integration-clean:
+	@echo "Stopping and cleaning up integration test containers and volumes..."
+	docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	@if [ -n "$$(docker ps -aq --filter 'status=exited')" ]; then \
+		docker rm $$(docker ps -aq --filter 'status=exited'); \
+	fi
+	@echo "Integration test environment cleaned up."
 
 # Remove all Kafka topics
 .PHONY: rm-kafka-topics
@@ -85,10 +111,11 @@ rm-kafka-topics:
 rm-generated-pipeline-config:
 	@echo "Removing generated pipeline files..."
 	rm -f pipelines/benthos/generated-pipeline.yaml
+	rm -f tests/integration/pipelines/test-generated-pipeline.yaml
 
 # Full reset (clean + docker down)
 .PHONY: reset
-reset: clean docker-down rm-kafka-topics data-clean rm-generated-pipeline-config
+reset: clean docker-clean-cache docker-down rm-kafka-topics data-clean rm-generated-pipeline-config integration-clean
 	@echo "Project reset complete."
 
 # Debug target to print paths and environment info
@@ -99,9 +126,23 @@ debug-info:
 	@echo "Source directory: $(SRC_DIR)"
 	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
 
+.PHONY: integration-test
+integration-test:
+	@echo "Running integration tests..."
+	# Build the Docker images for integration testing
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
+	
+	# Start the containers and run the tests, exiting with the code of test-pipeline-manager
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml up --exit-code-from test-pipeline-manager
+	
+	# Capture logs (optional)
+	docker compose -f tests/integration/docker-compose.override.yml logs
+	
+	@echo "Integration tests completed successfully."
+
 # Run Go tests
 .PHONY: test
 test:
-	@echo "Running tests..."
-	cd $(WORK_DIR) && go test -v ./...
+	@echo "Running unit tests..."
+	cd $(WORK_DIR) && go test -v $(TEST_DIRS)
 	@echo "Test run complete."

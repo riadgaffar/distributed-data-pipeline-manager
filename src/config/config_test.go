@@ -13,8 +13,10 @@ import (
 func mockAppConfig() *AppConfig {
 	return &AppConfig{
 		App: struct {
-			Profiling bool `yaml:"profiling"`
-			Source    struct {
+			Profiling              bool   `yaml:"profiling"`
+			PipelineTemplate       string `yaml:"pipeline_template"`
+			GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
+			Source                 struct {
 				Parser string `yaml:"parser"`
 				File   string `yaml:"file"`
 			} `yaml:"source"`
@@ -27,11 +29,13 @@ func mockAppConfig() *AppConfig {
 				URL   string `yaml:"url"`
 				Table string `yaml:"table"`
 			} `yaml:"postgres"`
-			LoggerConfig struct {
+			Logger struct {
 				Level string `yaml:"level"`
 			} `yaml:"logger"`
 		}{
-			Profiling: false,
+			Profiling:              false,
+			PipelineTemplate:       "pipelines/benthos/pipeline.yaml",
+			GeneratePipelineConfig: "pipelines/benthos/generated-pipeline.yaml",
 			Source: struct {
 				Parser string `yaml:"parser"`
 				File   string `yaml:"file"`
@@ -55,7 +59,7 @@ func mockAppConfig() *AppConfig {
 				URL:   "postgresql://user:password@localhost:5432/test_db?sslmode=disable",
 				Table: "test_table",
 			},
-			LoggerConfig: struct {
+			Logger: struct {
 				Level string `yaml:"level"`
 			}{
 				Level: "DEBUG",
@@ -107,8 +111,14 @@ func TestLoadConfig_Success(t *testing.T) {
 	if config.App.Postgres.Table != mockConfig.App.Postgres.Table {
 		t.Errorf("expected Postgres Table %s, got %s", mockConfig.App.Postgres.Table, config.App.Postgres.Table)
 	}
-	if config.App.LoggerConfig.Level != mockConfig.App.LoggerConfig.Level {
-		t.Errorf("expected Logger Level %s, got %s", mockConfig.App.LoggerConfig.Level, config.App.LoggerConfig.Level)
+	if config.App.Logger.Level != mockConfig.App.Logger.Level {
+		t.Errorf("expected Logger Level %s, got %s", mockConfig.App.Logger.Level, config.App.Logger.Level)
+	}
+	if config.App.PipelineTemplate != mockConfig.App.PipelineTemplate {
+		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.PipelineTemplate, config.App.PipelineTemplate)
+	}
+	if config.App.GeneratePipelineConfig != mockConfig.App.GeneratePipelineConfig {
+		t.Errorf("expected PipelineTemplate %s, got %s", mockConfig.App.GeneratePipelineConfig, config.App.GeneratePipelineConfig)
 	}
 }
 

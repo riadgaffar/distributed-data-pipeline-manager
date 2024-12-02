@@ -5,7 +5,7 @@ import (
 
 	"distributed-data-pipeline-manager/src/parsers"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 // Producer defines an interface for producing messages.

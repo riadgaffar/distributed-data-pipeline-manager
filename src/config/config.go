@@ -10,8 +10,10 @@ import (
 // AppConfig defines the structure for dynamic configuration
 type AppConfig struct {
 	App struct {
-		Profiling bool `yaml:"profiling"`
-		Source    struct {
+		Profiling              bool   `yaml:"profiling"`
+		PipelineTemplate       string `yaml:"pipeline_template"`
+		GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
+		Source                 struct {
 			Parser string `yaml:"parser"`
 			File   string `yaml:"file"`
 		} `yaml:"source"`
@@ -24,7 +26,7 @@ type AppConfig struct {
 			URL   string `yaml:"url"`
 			Table string `yaml:"table"`
 		} `yaml:"postgres"`
-		LoggerConfig struct {
+		Logger struct {
 			Level string `yaml:"level"`
 		} `yaml:"logger"`
 	} `yaml:"app"`

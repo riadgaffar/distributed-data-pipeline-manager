@@ -3,6 +3,7 @@ package main
 import (
 	"distributed-data-pipeline-manager/src/config"
 	"distributed-data-pipeline-manager/src/execute_pipeline"
+	"distributed-data-pipeline-manager/src/orchestrator"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"runtime/pprof"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -28,7 +30,7 @@ func main() {
 	}
 
 	// Set logging level
-	setLogLevel(cfg.App.LoggerConfig.Level)
+	setLogLevel(cfg.App.Logger.Level)
 
 	// Enable profiling if configured
 	if cfg.App.Profiling {
@@ -73,11 +75,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Execute the pipeline
-	log.Println("DEBUG: Executing pipeline...")
-	executor := &execute_pipeline.RealCommandExecutor{}
-	if err := execute_pipeline.ExecutePipeline(os.Getenv("CONFIG_PATH"), executor); err != nil {
-		log.Fatalf("ERROR: Pipeline execution failed: %v\n", err)
+	// Initialize the pipeline orchestrator
+	isTesting := os.Getenv("INTEGRATION_TEST_MODE") == "true"
+	timeout := 0 * time.Second
+	if isTesting {
+		log.Println("INFO: Running in integration test mode")
+		timeout = 30 * time.Second // Adjust for integration tests
+	}
+	orchestrator := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, isTesting, timeout)
+
+	// Run the orchestrator
+	if err := orchestrator.Run(); err != nil {
+		log.Fatalf("ERROR: Orchestrator encountered an issue: %v\n", err)
 	}
 
 	log.Println("INFO: Pipeline executed successfully.")
