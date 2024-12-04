@@ -30,38 +30,50 @@ The Distributed Data Pipeline Manager is a robust tool for managing, orchestrati
 # Project structure
 ```plaintext
 distributed-data-pipeline-manager/
+├── cmd/                              # Main application entry points
+│   ├── pipeline-manager/             # Entry point for the pipeline manager
+│   │   └── main.go                   # Main entry point
 ├── config/
 │   ├── app-config.yaml               # Primary dynamic configuration file
-├── README.md
-├── docker-compose.yml
-├── go.mod                            # Module definition
-├── go.sum
-├── main.go                           # Entry point
+├── deployments/                      # Deployment configurations
+│   ├── docker/                       # Docker-related deployment files
+│   │   ├── Dockerfile                # Build instructions for the app
+│   │   ├── docker-compose.yml        # Docker Compose for local deployment
+│   └── k8s/                          # Kubernetes manifests and Helm charts
+│       ├── base/                     # Raw Kubernetes YAML files
+│       │   ├── deployment.yaml       # App deployment manifest
+│       │   ├── service.yaml          # App service manifest
+│       │   ├── configmap.yaml        # App configuration as a ConfigMap
+│       │   ├── secret.yaml           # Secrets for sensitive data
+│       ├── overlays/                 # Environment-specific customizations
+│           ├── dev/                  # Development environment configs
+│           ├── prod/                 # Production environment configs
+├── docs/                            # Documentation for the project
+│   ├── images/                      # Images for README and docs
 ├── pipelines/
 │   └── benthos/
 │       └── pipeline.yaml
 ├── src/
 |   ├── config/
-│   │   └── config_test.go            # Configuration Unit Tests
-│   │   └── config.go                 # Configuration logic
+│   │   └── config_test.go              # Configuration Unit Tests
+│   │   └── config.go                   # Configuration logic
 │   ├── consumer/
-│   │   └── consumer_interface.go     # Consumer Interface
-│   │   └── consumer_test.go          # Consumer Unit Tests
-│   │   └── consumer.go               # Consumer logic
+│   │   └── consumer_interface.go       # Consumer Interface
+│   │   └── consumer_test.go            # Consumer Unit Tests
+│   │   └── consumer.go                 # Consumer logic
 |   ├── execute_pipeline/
-│   │   └── execute_pipeline_test.go  # Pipeline Execution Unit Tests
-│   │   └── execute_pipeline.go       # Pipeline Execution logic
+│   │   └── execute_pipeline_test.go    # Pipeline Execution Unit Tests
+│   │   └── execute_pipeline.go         # Pipeline Execution logic
 |   ├── orchestrator/
-│   │   └── orchestrator.go           # Pipeline lifecycle logic to manage setup, execution, monitoring, and shutdown.
+│   │   └── orchestrator.go             # Pipeline lifecycle logic.
 |   ├── parsers/
-│   │   └── json_parser.go            # JSON Parser logic
-│   │   └── parsers_test.go           # Parsers Unit Tests
-│   │   └── parsers.go                # Parsers logic
+│   │   └── json_parser.go              # JSON Parser logic
+│   │   └── parsers_test.go             # Parsers Unit Tests
+│   │   └── parsers.go                  # Parsers logic
 │   ├── producer/
-│   │   └── producer_test.go          # Producer Unit Tests
-│   │   └── producer.go               # Producer logic
-├── docs/                             # images and project documentation
-│── tests/                            # e2e and integration tests
+│   │   └── producer_test.go            # Producer Unit Tests
+│   │   └── producer.go                 # Producer logic
+│── tests/                              # e2e and integration tests
 │   |── integration/
 │   │   ├── configs/                     # Integration test pipeline config
 │   │   │   └── test-app-config.yaml     # Config file specific to integration testing
@@ -73,6 +85,11 @@ distributed-data-pipeline-manager/
 │   │   ├── Dockerfile                   # Definition of the IT build image for the service
 │   │   ├── helpers.go                   # Shared helper functions for integration tests
 │   │   ├── integration_test.go          # Go test file for integration tests
+├── go.mod                               # Go module definition
+├── go.sum                               # Go dependencies checksum
+├── Makefile                             # Common commands for building, testing, running
+├── LICENSE                              # License file
+├── README.md                            # Main documentation
 
 ```
 
