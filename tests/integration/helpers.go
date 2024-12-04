@@ -47,22 +47,25 @@ func loadTestConfig(t *testing.T, configPath string) *config.AppConfig {
 }
 
 // parseTestMessages parses the test messages from the specified file.
+// parseTestMessages parses the test messages from the specified file.
 func parseTestMessages(t *testing.T, testDataPath string) []interface{} {
 	parser := &parsers.JSONParser{}
 	data, err := os.ReadFile(testDataPath)
 	require.NoError(t, err, "Failed to read test data file")
 
-	messages, err := parser.Parse(data)
+	parsedData, err := parser.Parse(data)
 	require.NoError(t, err, "Failed to parse test messages")
-	require.NotEmpty(t, messages, "Parsed messages should not be empty")
+	require.NotNil(t, parsedData, "Parsed data should not be nil")
 
-	// Convert []string to []interface{}
-	interfaceMessages := make([]interface{}, len(messages))
-	for i, msg := range messages {
-		interfaceMessages[i] = msg
+	// Handle different types of parsed data
+	switch v := parsedData.(type) {
+	case []interface{}:
+		return v
+	case map[string]interface{}:
+		return []interface{}{v}
+	default:
+		return []interface{}{parsedData}
 	}
-
-	return interfaceMessages
 }
 
 // produceMessagesToKafka sends test messages to Kafka topics.

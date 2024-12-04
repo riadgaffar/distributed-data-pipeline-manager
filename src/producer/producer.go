@@ -1,6 +1,7 @@
 package producer
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -69,20 +70,43 @@ func (kp *KafkaProducer) Close() {
 // ProduceMessages sends multiple messages using the provided producer and parser.
 func ProduceMessages(producer Producer, topics []string, parser parsers.Parser, data []byte) error {
 	// Step 1: Parse the data
-	messages, err := parser.Parse(data)
+	parsedData, err := parser.Parse(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse data: %w", err)
+	}
+
+	// Convert parsed data to messages based on type
+	var messages []string
+	switch v := parsedData.(type) {
+	case []interface{}:
+		for _, item := range v {
+			messages = append(messages, fmt.Sprintf("%v", item))
+		}
+	case map[string]interface{}:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal message: %w", err)
+		}
+		messages = append(messages, string(jsonBytes))
+	case string:
+		messages = append(messages, v)
+	default:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("failed to marshal message: %w", err)
+		}
+		messages = append(messages, string(jsonBytes))
 	}
 
 	// Create a delivery channel
 	deliveryChan := make(chan kafka.Event, len(messages))
 
-	// Step 2: Produce messages with batching
+	// Rest of the function remains the same
 	for _, message := range messages {
-		key := fmt.Sprintf("key-%d", rand.Intn(1000000)) // Generate a unique key for each message
+		key := fmt.Sprintf("key-%d", rand.Intn(1000000))
 		err := producer.Produce(&kafka.Message{
 			TopicPartition: kafka.TopicPartition{Topic: &topics[0], Partition: kafka.PartitionAny},
-			Key:            []byte(key), // Add a key for partitioning
+			Key:            []byte(key),
 			Value:          []byte(message),
 		}, deliveryChan)
 		if err != nil {
@@ -101,12 +125,12 @@ func ProduceMessages(producer Producer, topics []string, parser parsers.Parser, 
 
 	close(deliveryChan)
 
-	// Step 3: Flush all messages with retry logic
+	// Flush messages with retry logic
 	maxFlushRetries := 3
 	for retry := 0; retry < maxFlushRetries; retry++ {
-		unflushed := producer.Flush(30000) // 30 seconds timeout
+		unflushed := producer.Flush(30000)
 		if unflushed == 0 {
-			break // Successfully flushed all messages
+			break
 		}
 
 		log.Printf("Retrying flush (%d/%d): %d messages still in queue", retry+1, maxFlushRetries, unflushed)
