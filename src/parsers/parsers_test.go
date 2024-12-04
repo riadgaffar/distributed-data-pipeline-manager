@@ -8,7 +8,8 @@ func TestJSONParser(t *testing.T) {
 	parser := &JSONParser{}
 
 	// Valid JSON input
-	validJSON := []byte(`{"messages": ["Message 1", "Message 2", "Message 3"]}`)
+	validJSON := []byte(`["Message 1", "Message 2", "Message 3"]`)
+
 	messages, err := parser.Parse(validJSON)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
