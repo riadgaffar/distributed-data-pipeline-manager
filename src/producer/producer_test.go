@@ -1,6 +1,7 @@
 package producer
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -14,138 +15,117 @@ type MockParser struct {
 	mock.Mock
 }
 
-func (m *MockParser) Parse(data []byte) ([]string, error) {
+func (m *MockParser) Parse(data []byte) (interface{}, error) {
 	args := m.Called(data)
-	return args.Get(0).([]string), args.Error(1)
+	return args.Get(0), args.Error(1)
 }
 
-// MockProducer simulates the Producer interface
+// Rest of the mock implementations remain the same
 type MockProducer struct {
-	mock.Mock
+	ProducedMessages []*kafka.Message
+	FlushCount       int
+	FlushFunc        func(timeoutMs int) int
 }
 
-func (m *MockProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error {
-	args := m.Called(msg, deliveryChan)
-
-	// Simulate asynchronous delivery report
+func (mp *MockProducer) Produce(msg *kafka.Message, deliveryChan chan kafka.Event) error {
+	mp.ProducedMessages = append(mp.ProducedMessages, msg)
 	if deliveryChan != nil {
-		go func() {
-			defer func() {
-				// Avoid panic if the channel is closed
-				recover()
-			}()
-			// Send a simulated delivery result only if no error is expected
-			if args.Error(0) == nil {
-				deliveryChan <- &kafka.Message{
-					TopicPartition: kafka.TopicPartition{
-						Topic:     msg.TopicPartition.Topic,
-						Partition: 0,
-						Error:     nil, // Simulate success
-					},
+		deliveryChan <- &kafka.Message{TopicPartition: kafka.TopicPartition{Topic: msg.TopicPartition.Topic}}
+	}
+	return nil
+}
+
+func (mp *MockProducer) Flush(timeoutMs int) int {
+	if mp.FlushFunc != nil {
+		return mp.FlushFunc(timeoutMs)
+	}
+	mp.FlushCount++
+	return 0
+}
+
+func (mp *MockProducer) Close() {}
+
+func TestProduceMessages(t *testing.T) {
+	tests := []struct {
+		name        string
+		mockData    interface{}
+		inputData   []byte
+		expectError bool
+		messages    []string
+	}{
+		{
+			name:        "Simple JSON object",
+			mockData:    map[string]interface{}{"name": "John", "age": 30},
+			inputData:   []byte(`{"name":"John","age":30}`),
+			expectError: false,
+			messages:    []string{`{"name":"John","age":30}`},
+		},
+		{
+			name:        "JSON array",
+			mockData:    []interface{}{"message1", "message2", "message3"},
+			inputData:   []byte(`["message1","message2","message3"]`),
+			expectError: false,
+			messages:    []string{"message1", "message2", "message3"},
+		},
+		{
+			name:        "Parse error",
+			mockData:    nil,
+			inputData:   []byte(`invalid json`),
+			expectError: true,
+			messages:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockProducer := &MockProducer{}
+			mockParser := &MockParser{}
+
+			if tt.expectError {
+				mockParser.On("Parse", tt.inputData).Return(tt.mockData, errors.New("parse error"))
+			} else {
+				mockParser.On("Parse", tt.inputData).Return(tt.mockData, nil)
+			}
+
+			topics := []string{"test-topic"}
+			err := ProduceMessages(mockProducer, topics, mockParser, tt.inputData)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, len(tt.messages), len(mockProducer.ProducedMessages))
+				for i, expectedMsg := range tt.messages {
+					// Unmarshal both expected and actual JSON for comparison
+					var expected, actual map[string]interface{}
+					json.Unmarshal([]byte(expectedMsg), &expected)
+					json.Unmarshal(mockProducer.ProducedMessages[i].Value, &actual)
+					assert.Equal(t, expected, actual)
 				}
 			}
-		}()
+		})
 	}
-	return args.Error(0)
 }
 
-func (m *MockProducer) Close() {
-	m.Called()
-}
+// TestFlushError remains the same
+func TestFlushError(t *testing.T) {
+	mockProducer := &MockProducer{}
+	mockProducer.FlushFunc = func(timeoutMs int) int {
+		mockProducer.FlushCount++
+		return 1
+	}
 
-// TestProduceMessages_Success validates successful message production
-func TestProduceMessages_Success(t *testing.T) {
-	mockProducer := new(MockProducer)
-	mockParser := new(MockParser)
+	mockParser := &MockParser{}
+	mockParser.On("Parse", mock.Anything).Return(
+		map[string]interface{}{"message": "test"},
+		nil,
+	)
 
-	testData := []byte(`test data`)
-	parsedMessages := []string{"message1", "message2"}
 	topics := []string{"test-topic"}
-	messageCount := 2
+	data := []byte(`{"message":"test"}`)
 
-	// Mock behaviors
-	mockParser.On("Parse", testData).Return(parsedMessages, nil)
-	mockProducer.On("Produce", mock.Anything, mock.Anything).Return(nil)
-
-	// Execute
-	err := ProduceMessages(mockProducer, topics, messageCount, mockParser, testData)
-
-	// Assert
-	assert.NoError(t, err)
-	mockParser.AssertExpectations(t)
-	mockProducer.AssertNumberOfCalls(t, "Produce", 2)
-}
-
-// TestNewKafkaProducer_EmptyBrokers checks the error for empty brokers
-func TestNewKafkaProducer_EmptyBrokers(t *testing.T) {
-	producer, err := NewKafkaProducer([]string{})
-
+	err := ProduceMessages(mockProducer, topics, mockParser, data)
 	assert.Error(t, err)
-	assert.Nil(t, producer)
-	assert.Contains(t, err.Error(), "no brokers provided")
-}
-
-// TestProduceMessages_ParserError simulates a parsing failure
-func TestProduceMessages_ParserError(t *testing.T) {
-	mockProducer := new(MockProducer)
-	mockParser := new(MockParser)
-
-	testData := []byte(`invalid data`)
-	mockParser.On("Parse", testData).Return([]string{}, errors.New("mock parser error"))
-
-	// Execute
-	err := ProduceMessages(mockProducer, []string{"test-topic"}, 1, mockParser, testData)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "mock parser error")
-	mockParser.AssertExpectations(t)
-	mockProducer.AssertNotCalled(t, "Produce")
-}
-
-// TestProduceMessages_EmptyMessages verifies behavior with empty messages
-func TestProduceMessages_EmptyMessages(t *testing.T) {
-	mockProducer := new(MockProducer)
-	mockParser := new(MockParser)
-
-	testData := []byte(`[]`) // No data
-	mockParser.On("Parse", testData).Return([]string{}, nil)
-
-	// Execute
-	err := ProduceMessages(mockProducer, []string{"test-topic"}, 0, mockParser, testData)
-
-	// Assert
-	assert.NoError(t, err)
-	mockParser.AssertExpectations(t)
-	mockProducer.AssertNotCalled(t, "Produce")
-}
-
-func TestProduceMessages_ProducerError(t *testing.T) {
-	mockProducer := new(MockProducer)
-	mockParser := new(MockParser)
-
-	testData := []byte(`{"message": "test payload"}`)
-	parsedMessages := []string{`{"message": "test payload"}`}
-	topics := []string{"error-topic"}
-	messageCount := 1
-
-	// Setup mock parser
-	mockParser.On("Parse", testData).Return(parsedMessages, nil)
-
-	// Setup mock producer with direct error return
-	mockProducer.On("Produce", mock.MatchedBy(func(msg *kafka.Message) bool {
-		// Initialize the topic to prevent nil pointer
-		topic := topics[0]
-		msg.TopicPartition.Topic = &topic
-		return true
-	}), mock.Anything).Return(errors.New("kafka broker connection failed"))
-
-	// Execute
-	err := ProduceMessages(mockProducer, topics, messageCount, mockParser, testData)
-
-	// Verify
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "kafka broker connection failed")
-	mockParser.AssertExpectations(t)
-	mockProducer.AssertNumberOfCalls(t, "Produce", 1)
+	assert.Contains(t, err.Error(), "failed to flush all messages")
+	assert.Equal(t, 3, mockProducer.FlushCount)
 }

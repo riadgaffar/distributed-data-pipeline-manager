@@ -9,8 +9,9 @@ app:
     brokers: ["localhost:9092"]
     topics: ["pipeline-topic"]
     consumer_group: "pipeline-group"
+    min_partitions: 3
   postgres:
     url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
     table: "processed_data"
   logger:
-    level: "DEBUG"
+    level: "TRACE"

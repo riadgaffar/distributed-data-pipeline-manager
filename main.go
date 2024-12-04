@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"distributed-data-pipeline-manager/src/config"
 	"distributed-data-pipeline-manager/src/execute_pipeline"
 	"distributed-data-pipeline-manager/src/orchestrator"
@@ -12,9 +13,11 @@ import (
 	"os"
 	"os/signal"
 	"runtime/pprof"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/sirupsen/logrus"
 )
 
@@ -53,10 +56,25 @@ func main() {
 	}
 
 	// Parse JSON data with support for mixed formats
-	messages, err := ParseMessages(data)
+	messageBytes, err := ParseMessages(data)
 	if err != nil {
 		log.Fatalf("ERROR: Failed to parse JSON data: %v\n", err)
 	}
+
+	// Dynamic topic partition management
+	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
+	topic := cfg.App.Kafka.Topics[0]
+	consumerGroup := cfg.App.Kafka.ConsumerGroup
+	threshold := 10000 // Example threshold
+	scaleBy := 2       // Example scale factor
+	checkInterval := 10 * time.Second
+
+	// Start the monitoring and scaling handler
+	err = ensureTopicPartitions(brokers, topic, 3)
+	if err != nil {
+		log.Printf("ERROR: Failed to scale partitions for topic %s: %v", topic, err)
+	}
+	go monitorAndScalePartitions(brokers, topic, consumerGroup, threshold, scaleBy, checkInterval)
 
 	// Initialize Kafka producer
 	kafkaProducer, err := producer.NewKafkaProducer(cfg.App.Kafka.Brokers)
@@ -67,9 +85,8 @@ func main() {
 	defer kafkaProducer.Close()
 
 	// Start producer
-	messageCount := len(messages)
 	log.Println("DEBUG: Starting producer...")
-	err = producer.ProduceMessages(kafkaProducer, cfg.App.Kafka.Topics, messageCount, parser, data)
+	err = producer.ProduceMessages(kafkaProducer, cfg.App.Kafka.Topics, parser, messageBytes)
 	if err != nil {
 		fmt.Printf("ERROR: Failed to produce messages: %v\n", err)
 		os.Exit(1)
@@ -192,34 +209,188 @@ func readSourceData(filePath string) ([]byte, error) {
 }
 
 // ParseMessages parses JSON data with support for mixed formats
-// ParseMessages parses JSON data with support for mixed formats
-func ParseMessages(data []byte) ([]string, error) {
-	var result []string
-
+func ParseMessages(data []byte) ([]byte, error) {
 	// Try parsing as an object with a "messages" field
 	var objectWithMessages struct {
 		Messages []string `json:"messages"`
 	}
 	if err := json.Unmarshal(data, &objectWithMessages); err == nil && len(objectWithMessages.Messages) > 0 {
-		result = objectWithMessages.Messages
-		return result, nil
+		return json.Marshal(objectWithMessages.Messages)
 	}
 
 	// Try parsing as an array of strings
 	var arrayOfStrings []string
 	if err := json.Unmarshal(data, &arrayOfStrings); err == nil {
-		result = arrayOfStrings
-		return result, nil
+		return json.Marshal(arrayOfStrings)
 	}
 
-	// Try parsing as a single object (fallback for single item cases)
+	// Try parsing as a single object
 	var singleMessage map[string]interface{}
 	if err := json.Unmarshal(data, &singleMessage); err == nil {
-		// Optionally process the single object and decide on the representation
-		singleMessageJSON, _ := json.Marshal(singleMessage)
-		result = []string{string(singleMessageJSON)}
-		return result, nil
+		return json.Marshal([]string{string(data)})
 	}
 
 	return nil, fmt.Errorf("unsupported JSON format: %s", string(data))
+}
+
+// Monitor and scale kafka partitions
+func monitorAndScalePartitions(brokers, topic, group string, threshold, scaleBy int, checkInterval time.Duration) {
+	log.Println("INFO: monitorAndScalePartitions started.")
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Fetch consumer lag
+		consumerLag, err := getConsumerLag(brokers, group, topic)
+		if err != nil {
+			log.Printf("ERROR: Failed to get consumer lag: %v", err)
+			continue
+		}
+
+		log.Printf("DEBUG: Consumer lag for topic %s: %d", topic, consumerLag)
+
+		// Check against threshold
+		if consumerLag > int64(threshold) {
+			log.Printf("INFO: Consumer lag (%d) exceeds threshold (%d). Scaling partitions...", consumerLag, threshold)
+
+			// Create admin client
+			adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
+			if err != nil {
+				log.Printf("ERROR: Failed to create admin client: %v", err)
+				continue
+			}
+
+			// Ensure the admin client is closed properly
+			func() {
+				defer adminClient.Close()
+
+				metadata, err := adminClient.GetMetadata(&topic, false, 5000)
+				if err != nil {
+					log.Printf("ERROR: Failed to fetch metadata for topic %s: %v", topic, err)
+					return
+				}
+
+				currentPartitions := len(metadata.Topics[topic].Partitions)
+				newPartitionCount := currentPartitions + scaleBy
+
+				// Scale partitions
+				err = ensureTopicPartitions(brokers, topic, newPartitionCount)
+				if err != nil {
+					log.Printf("ERROR: Failed to scale partitions for topic %s: %v", topic, err)
+				} else {
+					log.Printf("INFO: Successfully scaled partitions for topic %s to %d", topic, newPartitionCount)
+				}
+			}()
+		}
+	}
+}
+
+// Get consumer lag top manage kafka topics
+func getConsumerLag(brokers, group, topic string) (int64, error) {
+	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{
+		"bootstrap.servers":  brokers,
+		"request.timeout.ms": "10000",
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create admin client: %w", err)
+	}
+	defer adminClient.Close()
+
+	client, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers": brokers,
+		"group.id":          group,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to create kafka client: %w", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	groupPartitions := []kafka.ConsumerGroupTopicPartitions{{
+		Group:      group,
+		Partitions: []kafka.TopicPartition{{Topic: &topic, Partition: kafka.PartitionAny}},
+	}}
+
+	offsetsResult, err := adminClient.ListConsumerGroupOffsets(ctx, groupPartitions)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list consumer group offsets: %w", err)
+	}
+
+	// The result contains the same structure as input, with offsets filled in
+	consumerGroupOffsets := offsetsResult.ConsumerGroupsTopicPartitions[0]
+
+	metadata, err := adminClient.GetMetadata(&topic, false, 5000)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get metadata for topic %s: %w", topic, err)
+	}
+
+	var totalLag int64
+	for _, partition := range metadata.Topics[topic].Partitions {
+		_, high, err := client.GetWatermarkOffsets(topic, partition.ID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get watermark offsets for partition %d: %w", partition.ID, err)
+		}
+
+		// Find the matching partition in the consumer group offsets
+		for _, p := range consumerGroupOffsets.Partitions {
+			if p.Partition == partition.ID {
+				if p.Offset != kafka.OffsetInvalid && int64(p.Offset) < high {
+					totalLag += high - int64(p.Offset)
+				}
+				break
+			}
+		}
+	}
+
+	return totalLag, nil
+}
+
+// Application layer dynamic kafka topic partition management
+func ensureTopicPartitions(brokers string, topic string, minPartitions int) error {
+	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
+	if err != nil {
+		return fmt.Errorf("failed to create admin client: %w", err)
+	}
+	defer adminClient.Close()
+
+	// Fetch metadata for the topic
+	metadata, err := adminClient.GetMetadata(&topic, false, 5000)
+	if err != nil {
+		return fmt.Errorf("failed to get topic metadata: %w", err)
+	}
+
+	// Check the current partition count
+	currentPartitions := len(metadata.Topics[topic].Partitions)
+	if currentPartitions >= minPartitions {
+		log.Printf("Topic %s already has %d partitions (min required: %d)", topic, currentPartitions, minPartitions)
+		return nil
+	}
+
+	// Add partitions if the current count is less than required
+	log.Printf("Increasing partitions for topic %s from %d to %d", topic, currentPartitions, minPartitions)
+	results, err := adminClient.CreatePartitions(
+		context.Background(),
+		[]kafka.PartitionsSpecification{
+			{
+				Topic:      topic,
+				IncreaseTo: minPartitions,
+			},
+		},
+		kafka.SetAdminOperationTimeout(5000),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to increase partitions: %w", err)
+	}
+
+	// Log results
+	for _, result := range results {
+		if result.Error.Code() != kafka.ErrNoError {
+			return fmt.Errorf("partition increase failed for topic %s: %v", topic, result.Error)
+		}
+	}
+
+	log.Printf("Partitions for topic %s successfully increased to %d", topic, minPartitions)
+	return nil
 }

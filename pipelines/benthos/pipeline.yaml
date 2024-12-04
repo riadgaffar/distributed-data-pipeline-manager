@@ -4,10 +4,14 @@ input:
     addresses: ["${KAFKA_BROKERS}"]
     topics: ["${KAFKA_TOPICS}"]
     consumer_group: "${KAFKA_CONSUMER_GROUP}"
+    start_from_oldest: true
 
 # Pipeline section: Processes and transforms data
 pipeline:
   processors:
+    - dedupe:
+        cache: dedup_cache
+        key: "${! content() }"
     - mapping: |
         root.id = uuid_v4()
         root.timestamp = now()
@@ -26,7 +30,7 @@ pipeline:
         labels:
           service: "redpanda"
           pipeline: "kafka_to_postgres"
-    
+
     # Count dropped messages (when insert fails)
     - catch:
         - metric:
@@ -37,13 +41,32 @@ pipeline:
               service: "redpanda"
               pipeline: "kafka_to_postgres"
 
+        - metric:
+            type: counter
+            name: pipeline_error_count
+            value: "1"
+            labels:
+              error_type: "${! error() }"
+
+        - metric:
+            type: timing
+            name: pipeline_processing_latency_seconds
+            labels:
+              service: "redpanda"
+              pipeline: "kafka_to_postgres"
+              stage: "processing"
+
+        - log:
+            level: ERROR
+            message: "Error in pipeline: ${! error() }"
+
 # Output section: Routes data to multiple destinations
 output:
   fallback:
     - retry:
-        max_retries: 3
+        max_retries: 5
         backoff:
-          initial_interval: 500ms
+          initial_interval: 1s
         output:
           sql_insert:
             driver: postgres
@@ -56,8 +79,11 @@ output:
                 this.timestamp,
                 this.data
               ]
-            suffix: ON CONFLICT (data) DO NOTHING
-            max_in_flight: 1
+            suffix: ON CONFLICT (data, timestamp) DO UPDATE SET timestamp = EXCLUDED.timestamp
+            max_in_flight: 10
+            batching:
+              count: 100  # Number of messages per batch
+              period: 100ms  # Time window for batching
 
     - redpanda:
         seed_brokers: ["${KAFKA_BROKERS}"]
@@ -77,3 +103,9 @@ http:
 metrics:
   prometheus:
     use_histogram_timing: true
+
+# Cache resources section: Define the cache for deduplication
+cache_resources:
+  - label: dedup_cache
+    memory:
+      default_ttl: 60s

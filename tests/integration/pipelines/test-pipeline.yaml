@@ -4,10 +4,14 @@ input:
     addresses: ["${KAFKA_BROKERS}"]
     topics: ["${KAFKA_TOPICS}"]
     consumer_group: "${KAFKA_CONSUMER_GROUP}"
+    start_from_oldest: true
 
 # Pipeline section: Processes and transforms data
 pipeline:
   processors:
+    - dedupe:
+        cache: dedup_cache
+        key: "${! content() }"
     - mapping: |
         root.id = uuid_v4()
         root.timestamp = now()
@@ -38,7 +42,7 @@ output:
                 this.timestamp,
                 this.data
               ]
-            suffix: ON CONFLICT (data) DO NOTHING
+            suffix: ON CONFLICT (data, timestamp) DO UPDATE SET timestamp = EXCLUDED.timestamp
             max_in_flight: 1
 
     - redpanda:
@@ -51,3 +55,9 @@ output:
 # Logger section: Controls logging verbosity
 logger:
   level: "${LOG_LEVEL}"
+
+# Cache resources section: Define the cache for deduplication
+cache_resources:
+  - label: dedup_cache
+    memory:
+      default_ttl: 60s

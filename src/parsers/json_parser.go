@@ -8,17 +8,17 @@ import (
 // JSONParser implements the Parser interface for JSON data.
 type JSONParser struct{}
 
-// JSONPayload represents the expected structure of the JSON input.
-type JSONPayload struct {
-	Messages []string `json:"messages"`
-}
-
 // Parse parses the JSON data and returns a list of messages.
-func (j *JSONParser) Parse(data []byte) ([]string, error) {
-	var payload JSONPayload
-	if err := json.Unmarshal(data, &payload); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+func (p *JSONParser) Parse(data []byte) (interface{}, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("failed to parse JSON: unexpected end of JSON input")
 	}
 
-	return payload.Messages, nil
+	var payload interface{}
+	err := json.Unmarshal(data, &payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+
+	return payload, nil
 }
