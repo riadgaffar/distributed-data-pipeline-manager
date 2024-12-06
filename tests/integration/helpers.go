@@ -48,7 +48,7 @@ func loadTestConfig(t *testing.T, configPath string) *config.AppConfig {
 
 // parseTestMessages parses the test messages from the specified file.
 // parseTestMessages parses the test messages from the specified file.
-func parseTestMessages(t *testing.T, testDataPath string) []interface{} {
+func parseJSONTestMessages(t *testing.T, testDataPath string) []interface{} {
 	parser := &parsers.JSONParser{}
 	data, err := os.ReadFile(testDataPath)
 	require.NoError(t, err, "Failed to read test data file")
