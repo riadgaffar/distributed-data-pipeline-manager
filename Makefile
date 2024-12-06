@@ -36,8 +36,8 @@ build-debug:
 # Run the application
 .PHONY: run
 run: build docker-up
-	@echo "Running the application..."
-	CONFIG_PATH=$(CONFIG_PATH) $(BIN_PATH)
+	@echo "Application stack is running..."
+	docker compose -f $(DOCKER_COMPOSE) logs --follow
 
 # Run the application with profiling
 .PHONY: run-profile
@@ -55,7 +55,7 @@ debug: build-debug
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker Compose services..."
-	docker compose -f $(DOCKER_COMPOSE) up -d
+	docker compose -f $(DOCKER_COMPOSE) up --build -d
 
 # Stop Docker Compose
 .PHONY: docker-down
