@@ -63,11 +63,19 @@ docker-down:
 	@echo "Stopping and removing all containers..."
 	docker compose -f $(DOCKER_COMPOSE) down -v
 
+# Clean Docker Networks
+.PHONY: docker-clean-networks
+docker-clean-networks:
+	@echo "Cleaning docker build networks..."
+	docker network prune -f 
+	@echo "Docker build networks clean complete."
+
+
 # Clean Docker Build Cache
 .PHONY: docker-clean-cache
 docker-clean-cache:
 	@echo "Cleaning docker build cache..."
-	docker builder prune -f
+	docker builder prune --all -f
 	@echo "Docker build cache clean complete."
 
 # Clean up data artifacts
@@ -143,5 +151,5 @@ rm-generated-pipeline-config:
 
 # Full reset (clean + docker down)
 .PHONY: reset
-reset: clean docker-clean-cache docker-down rm-kafka-topics data-clean rm-generated-pipeline-config integration-clean
+reset: clean docker-down rm-kafka-topics data-clean rm-generated-pipeline-config integration-clean docker-clean-networks docker-clean-cache
 	@echo "Project reset complete."

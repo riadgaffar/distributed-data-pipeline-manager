@@ -38,7 +38,7 @@ pipeline:
             name: kafka_postgres_messages_dropped
             value: "1"
             labels:
-              service: "redpanda"
+              service: "pipeline-manager"
               pipeline: "kafka_to_postgres"
 
         - metric:
@@ -52,7 +52,7 @@ pipeline:
             type: timing
             name: pipeline_processing_latency_seconds
             labels:
-              service: "redpanda"
+              service: "pipeline-manager"
               pipeline: "kafka_to_postgres"
               stage: "processing"
 
@@ -98,7 +98,7 @@ logger:
 
 # Metrics section: Exposes metrics directly via HTTP
 http:
-  address: "127.0.0.1:4195"
+  address: "0.0.0.0:4195"
 
 metrics:
   prometheus:

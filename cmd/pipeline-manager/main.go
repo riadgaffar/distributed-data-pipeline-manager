@@ -7,12 +7,14 @@ import (
 	"distributed-data-pipeline-manager/src/orchestrator"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
-	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime/pprof"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -23,24 +25,48 @@ import (
 
 var cpuProfileFile *os.File
 
-func main() {
-	log.Println("INFO: Distributed Data Pipeline Manager")
+// Rearranged Kafka Operations and Message Handling
 
-	// Load configuration
-	cfg, err := loadConfig()
+func main() {
+	// Define and parse flags
+	help := flag.Bool("help", false, "Show help for the application")
+	configPath := flag.String("config", "", "Path to the configuration file")
+	port := flag.Int("port", 8080, "Port for the application to listen on")
+	flag.Parse()
+
+	if *help {
+		showHelpOptions()
+		os.Exit(0)
+	}
+
+	// If configPath is empty, handle it (e.g., log or set a fallback)
+	if *configPath == "" {
+		log.Println("INFO: --config flag not provided, configPath is empty.")
+	} else {
+		if err := validateConfigPath(*configPath); err != nil {
+			log.Fatalf("Invalid configuration path: %v\n", err)
+		}
+	}
+
+	if err := validatePort(*port); err != nil {
+		log.Fatalf("Invalid port: %v\n", err)
+	}
+
+	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("ERROR: %v\n", err)
 	}
 
-	// Set logging level
+	log.Printf("INFO: Starting pipeline manager on port %d with config: %s\n", *port, *configPath)
+	startServer(*port)
+
+	log.Println("INFO: Distributed Data Pipeline Manager")
 	setLogLevel(cfg.App.Logger.Level)
 
-	// Enable profiling if configured
 	if cfg.App.Profiling {
 		defer enableProfiling()()
 	}
 
-	// Capture termination signals for graceful shutdown
 	setupSignalHandler()
 
 	// Initialize the parser
@@ -49,59 +75,48 @@ func main() {
 		log.Fatalf("ERROR: %v\n", err)
 	}
 
-	// Read source data
-	data, err := readSourceData(cfg.App.Source.File)
-	if err != nil {
-		log.Fatalf("ERROR: Failed to read source file: %v\n", err)
-	}
-
-	// Parse JSON data with support for mixed formats
-	messageBytes, err := ParseMessages(data)
-	if err != nil {
-		log.Fatalf("ERROR: Failed to parse JSON data: %v\n", err)
-	}
-
-	// Dynamic topic partition management
+	// Kafka Brokers and Topic Configuration
 	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
-	topic := cfg.App.Kafka.Topics[0]
+	topic := strings.Join(cfg.App.Kafka.Topics, ",")
 	consumerGroup := cfg.App.Kafka.ConsumerGroup
-	threshold := 10000 // Example threshold
-	scaleBy := 2       // Example scale factor
+	threshold := 10000 // threshold for partition scaling
+	scaleBy := 2       // scale factor
 	checkInterval := 10 * time.Second
 
-	// Start the monitoring and scaling handler
+	// Ensure Minimum Partitions for Topic
 	err = ensureTopicPartitions(brokers, topic, 3)
 	if err != nil {
 		log.Printf("ERROR: Failed to scale partitions for topic %s: %v", topic, err)
 	}
+
+	// Start Monitoring and Scaling for Topic
 	go monitorAndScalePartitions(brokers, topic, consumerGroup, threshold, scaleBy, checkInterval)
 
-	// Initialize Kafka producer
+	// Kafka Producer Initialization
 	kafkaProducer, err := producer.NewKafkaProducer(cfg.App.Kafka.Brokers)
 	if err != nil {
-		fmt.Printf("ERROR: Failed to initialize Kafka producer: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("ERROR: Failed to initialize Kafka producer: %v", err)
 	}
 	defer kafkaProducer.Close()
 
-	// Start producer
-	log.Println("DEBUG: Starting producer...")
-	err = producer.ProduceMessages(kafkaProducer, cfg.App.Kafka.Topics, parser, messageBytes)
+	log.Println("DEBUG: Kafka producer initialized and ready.")
+
+	// Produce Messages Dynamically (replace `messageBytes` with dynamic streaming)
+	log.Println("DEBUG: Starting message production...")
+	err = producer.ProduceMessages(kafkaProducer, cfg.App.Kafka.Topics, parser, nil) // Adjust args if needed
 	if err != nil {
-		fmt.Printf("ERROR: Failed to produce messages: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("ERROR: Failed to produce messages: %v\n", err)
 	}
 
-	// Initialize the pipeline orchestrator
+	// Pipeline Orchestration
 	isTesting := os.Getenv("INTEGRATION_TEST_MODE") == "true"
 	timeout := 0 * time.Second
 	if isTesting {
 		log.Println("INFO: Running in integration test mode")
-		timeout = 30 * time.Second // Adjust for integration tests
+		timeout = 30 * time.Second
 	}
-	orchestrator := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, isTesting, timeout)
 
-	// Run the orchestrator
+	orchestrator := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, isTesting, timeout)
 	if err := orchestrator.Run(); err != nil {
 		log.Fatalf("ERROR: Orchestrator encountered an issue: %v\n", err)
 	}
@@ -109,19 +124,70 @@ func main() {
 	log.Println("INFO: Pipeline executed successfully.")
 }
 
-// loadConfig loads the configuration from CONFIG_PATH
-func loadConfig() (*config.AppConfig, error) {
+// showHelpOptions displays help information
+func showHelpOptions() {
+	fmt.Println("Pipeline Manager Application")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  pipeline_manager [options]")
+	fmt.Println()
+	fmt.Println("Options:")
+	flag.PrintDefaults()
+	fmt.Println()
+}
+
+// validateConfigPath checks if the configuration file path exists
+func validateConfigPath(configPath string) error {
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return fmt.Errorf("configuration file does not exist: %s", configPath)
+	}
+	return nil
+}
+
+// validatePort ensures the provided port is within a valid range
+func validatePort(port int) error {
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("port number %d is out of range (1-65535)", port)
+	}
+	return nil
+}
+
+// startServer starts the HTTP server on the specified port
+func startServer(port int) {
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+	go func() {
+		if err := http.ListenAndServe(":"+strconv.Itoa(port), nil); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+	}()
+}
+
+// loadConfig loads the configuration from the CONFIG_PATH environment variable or the --config flag
+func loadConfig(configPathFlag string) (*config.AppConfig, error) {
+	// Determine configuration path precedence
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
-		return nil, fmt.Errorf("CONFIG_PATH environment variable is not set")
+		configPath = configPathFlag
+		log.Printf("INFO: CONFIG_PATH not set, using --config flag value: %s", configPath)
+	} else {
+		log.Printf("INFO: Using CONFIG_PATH environment variable: %s", configPath)
 	}
 
+	// Validate the configuration path
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("configuration file does not exist: %s", configPath)
+	}
+
+	// Load the configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
+		return nil, fmt.Errorf("failed to load configuration from %s: %w", configPath, err)
 	}
 
-	log.Printf("INFO: Loaded configuration: %+v\n", cfg)
+	log.Printf("INFO: Loaded configuration: %+v", cfg)
 	return cfg, nil
 }
 
@@ -197,40 +263,6 @@ func initializeParser(parserType string) (parsers.Parser, error) {
 	default:
 		return nil, fmt.Errorf("unsupported parser type: '%s'", parserType)
 	}
-}
-
-// readSourceData reads and returns the contents of a source file
-func readSourceData(filePath string) ([]byte, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read source file %s: %w", filePath, err)
-	}
-	return data, nil
-}
-
-// ParseMessages parses JSON data with support for mixed formats
-func ParseMessages(data []byte) ([]byte, error) {
-	// Try parsing as an object with a "messages" field
-	var objectWithMessages struct {
-		Messages []string `json:"messages"`
-	}
-	if err := json.Unmarshal(data, &objectWithMessages); err == nil && len(objectWithMessages.Messages) > 0 {
-		return json.Marshal(objectWithMessages.Messages)
-	}
-
-	// Try parsing as an array of strings
-	var arrayOfStrings []string
-	if err := json.Unmarshal(data, &arrayOfStrings); err == nil {
-		return json.Marshal(arrayOfStrings)
-	}
-
-	// Try parsing as a single object
-	var singleMessage map[string]interface{}
-	if err := json.Unmarshal(data, &singleMessage); err == nil {
-		return json.Marshal([]string{string(data)})
-	}
-
-	return nil, fmt.Errorf("unsupported JSON format: %s", string(data))
 }
 
 // Monitor and scale kafka partitions

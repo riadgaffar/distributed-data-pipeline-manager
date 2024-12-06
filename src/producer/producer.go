@@ -69,7 +69,26 @@ func (kp *KafkaProducer) Close() {
 
 // ProduceMessages sends multiple messages using the provided producer and parser.
 func ProduceMessages(producer Producer, topics []string, parser parsers.Parser, data []byte) error {
-	// Step 1: Parse the data
+	// Validate input arguments
+	if producer == nil {
+		return fmt.Errorf("producer is nil")
+	}
+	if len(topics) == 0 {
+		return fmt.Errorf("no topics provided")
+	}
+
+	// If data is nil, log and return without sending anything
+	if data == nil {
+		log.Println("INFO: No data to process. Waiting for messages...")
+		return nil
+	}
+
+	// Check for nil parser
+	if parser == nil {
+		return fmt.Errorf("parser is nil")
+	}
+
+	// Parse the data
 	parsedData, err := parser.Parse(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse data: %w", err)

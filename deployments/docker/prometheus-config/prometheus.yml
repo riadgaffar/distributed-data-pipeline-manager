@@ -1,16 +1,16 @@
 global:
-  scrape_interval: 5s  # Frequency of scraping metrics
+  scrape_interval: 15s  # Reduced to a reasonable frequency for production
 
 scrape_configs:
-  - job_name: 'kafka_to_postgres'
+  - job_name: 'pipeline-manager'
     static_configs:
-      - targets: ['host.docker.internal:4195']
+      - targets: ['pipeline-manager:4195']  # Updated to match container name
     metrics_path: '/metrics'
 
   - job_name: 'redpanda'
     static_configs:
-      - targets: ['redpanda:9644']
-  
+      - targets: ['redpanda:9644']  # Updated to match container name
+
   - job_name: "node-exporter"
     static_configs:
-      - targets: ["host.docker.internal:9100"]
+      - targets: ['node-exporter:9100']  # Replaced host.docker.internal
