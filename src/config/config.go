@@ -15,7 +15,6 @@ type AppConfig struct {
 		GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
 		Source                 struct {
 			Parser string `yaml:"parser"`
-			File   string `yaml:"file"`
 		} `yaml:"source"`
 		Kafka struct {
 			Brokers       []string `yaml:"brokers"`

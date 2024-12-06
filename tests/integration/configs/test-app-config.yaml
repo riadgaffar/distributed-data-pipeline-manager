@@ -4,7 +4,6 @@ app:
   generated_pipeline_config: "../../tests/integration/pipelines/test-generated-pipeline.yaml"
   source:
     parser: json
-    file: /app/data/test-messages.json
   kafka:
     brokers: ["test-redpanda:29092"]
     topics: ["test-topic"]
