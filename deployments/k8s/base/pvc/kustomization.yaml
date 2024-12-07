@@ -1,4 +1,5 @@
 resources:
+  - grafana-pvc.yaml
   - postgres-pvc.yaml
   - redpanda-pvc.yaml
   

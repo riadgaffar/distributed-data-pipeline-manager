@@ -7,10 +7,13 @@ metadata:
   labels:
     io.kompose.service: grafana
   name: grafana
+  namespace: dev
 spec:
+  type: NodePort
   ports:
     - name: "3000"
       port: 3000
       targetPort: 3000
+      nodePort: 32000 # Optional: Fixed NodePort, or let Kubernetes assign one
   selector:
     io.kompose.service: grafana

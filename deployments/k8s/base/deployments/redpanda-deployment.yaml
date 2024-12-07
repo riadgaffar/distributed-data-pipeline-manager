@@ -37,29 +37,6 @@ spec:
             - --check=false
             - --kafka-addr=PLAINTEXT://0.0.0.0:9092
             - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
-          livenessProbe:
-            exec:
-              command:
-                - rpk
-                - cluster
-                - health
-            failureThreshold: 10
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 9644
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          resources:
-            requests:
-              memory: "1Gi"
-              cpu: "500m"
-            limits:
-              memory: "2Gi"
-              cpu: "1"
           ports:
             - containerPort: 9092
               protocol: TCP
@@ -68,9 +45,29 @@ spec:
             - containerPort: 4195
               protocol: TCP
           volumeMounts:
-            - mountPath: /var/lib/redpanda/data
-              name: redpanda-claim0
+            - name: redpanda-claim0
+              mountPath: /var/lib/redpanda/data
+          readinessProbe:
+            exec:
+              command:
+                - rpk
+                - cluster
+                - health
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command:
+                - rpk
+                - cluster
+                - health
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
       volumes:
         - name: redpanda-claim0
           persistentVolumeClaim:
-            claimName: redpanda-pvc
+            claimName: redpanda-claim0
