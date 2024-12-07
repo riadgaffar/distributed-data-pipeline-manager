@@ -1,0 +1,8 @@
+resources:
+  - pipeline-manager-deployment.yaml
+  - redpanda-deployment.yaml
+  - grafana-deployment.yaml
+  - postgres-deployment.yaml
+  - prometheus-deployment.yaml
+  - node-exporter-deployment.yaml
+  

@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose -f ../docker/docker-compose.yml convert
+    kompose.version: 1.34.0 (HEAD)
+  labels:
+    app: redpanda
+    io.kompose.service: redpanda
+  name: redpanda
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose -f ../docker/docker-compose.yml convert
+        kompose.version: 1.34.0 (HEAD)
+      labels:
+        app: redpanda
+    spec:
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/vectorized/redpanda:v23.1.1
+          args:
+            - redpanda
+            - start
+            - --overprovisioned
+            - --smp 1
+            - --memory 1G
+            - --reserve-memory 0M
+            - --node-id 0
+            - --check=false
+            - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+            - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+          livenessProbe:
+            exec:
+              command:
+                - rpk
+                - cluster
+                - health
+            failureThreshold: 10
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9644
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1"
+          ports:
+            - containerPort: 9092
+              protocol: TCP
+            - containerPort: 9644
+              protocol: TCP
+            - containerPort: 4195
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/lib/redpanda/data
+              name: redpanda-claim0
+      volumes:
+        - name: redpanda-claim0
+          persistentVolumeClaim:
+            claimName: redpanda-pvc

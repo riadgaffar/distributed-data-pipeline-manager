@@ -1,0 +1,10 @@
+namespace: dev
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      kind: Deployment
+      name: pipeline-manager
+    path: pipeline-manager-patch.yaml

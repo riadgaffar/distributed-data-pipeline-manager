@@ -1,0 +1,24 @@
+apiVersion: v1
+data:
+  app-config.yaml: |
+    app:
+      profiling: false                 # Enable for development if needed
+      pipeline_template: "pipelines/benthos/pipeline.yaml"
+      generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
+      source:
+        parser: "json"                 # Supported parsers: json, avro, parquet
+      kafka:
+        brokers: ["redpanda:9092"]     # Use the hostname of the Kafka broker
+        topics: ["pipeline-topic"]
+        consumer_group: "pipeline-group"
+        min_partitions: 3
+      postgres:
+        url: "postgresql://admin:password@postgres:5432/pipelines?sslmode=disable"
+        table: "processed_data"
+      logger:
+        level: "TRACE"
+kind: ConfigMap
+metadata:
+  labels:
+    io.kompose.service: pipeline-manager
+  name: pipeline-manager-cm1

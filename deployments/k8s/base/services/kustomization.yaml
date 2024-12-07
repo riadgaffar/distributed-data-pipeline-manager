@@ -1,0 +1,8 @@
+resources:
+  - grafana-service.yaml
+  - node-exporter-service.yaml
+  - pipeline-manager-service.yaml
+  - postgres-service.yaml
+  - prometheus-service.yaml
+  - redpanda-service.yaml
+  

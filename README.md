@@ -41,13 +41,24 @@ distributed-data-pipeline-manager/
 │   │   ├── docker-compose.yml        # Docker Compose for local deployment
 │   └── k8s/                          # Kubernetes manifests and Helm charts
 │       ├── base/                     # Raw Kubernetes YAML files
+│       │   ├── deployments/          # Deployment manifests
+│       │   │   ├── pipeline-manager-deployment.yaml
+│       │   │   ├── postgres-deployment.yaml
+│       │   │   ├── redpanda-deployment.yaml
+│       │   │   └── ...
+│       │   ├── services/
+│       │   ├── configmaps/
+│       │   ├── pvc/
+│       │   └── secrets/
 │       │   ├── deployment.yaml       # App deployment manifest
 │       │   ├── service.yaml          # App service manifest
 │       │   ├── configmap.yaml        # App configuration as a ConfigMap
 │       │   ├── secret.yaml           # Secrets for sensitive data
 │       ├── overlays/                 # Environment-specific customizations
-│           ├── dev/                  # Development environment configs
-│           ├── prod/                 # Production environment configs
+│       │   ├── dev/                  # Development environment configs
+│       │   │   ├── kustomization.yaml
+│       │   │   ├── pipeline-manager-patch.yaml
+│       │   ├── prod/                # Production environment configs
 ├── docs/                            # Documentation for the project
 │   ├── images/                      # Images for README and docs
 ├── pipelines/

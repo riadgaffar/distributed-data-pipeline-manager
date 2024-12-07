@@ -1,0 +1,4 @@
+resources:
+  - postgres-pvc.yaml
+  - redpanda-pvc.yaml
+  
