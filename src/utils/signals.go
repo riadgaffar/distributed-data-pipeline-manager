@@ -7,16 +7,17 @@ import (
 	"syscall"
 )
 
-// setupSignalHandler captures termination signals for graceful shutdown
-func SetupSignalHandler() chan os.Signal {
+// ExitFunc allows os.Exit to be overridden for testing.
+var ExitFunc = os.Exit
+
+// SetupSignalHandler sets up a signal handler for graceful shutdown.
+func SetupSignalHandler() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
 		log.Println("INFO: Caught termination signal, shutting down...")
-		os.Exit(0)
+		ExitFunc(0) // Use the overridable ExitFunc
 	}()
-
-	return sigChan
 }

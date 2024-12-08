@@ -1,28 +1,39 @@
 package utils
 
 import (
+	"os"
 	"syscall"
 	"testing"
 	"time"
 )
 
 func TestSetupSignalHandler(t *testing.T) {
-	// Create a signal handler
-	sigChan := SetupSignalHandler()
+	// Override ExitFunc to prevent os.Exit from terminating the test
+	called := false
+	ExitFunc = func(code int) {
+		called = true
+		if code != 0 {
+			t.Errorf("Expected exit code 0, got %d", code)
+		}
+	}
 
-	// Simulate sending a SIGTERM signal
+	// Reset ExitFunc after the test
+	defer func() { ExitFunc = os.Exit }()
+
+	// Set up the signal handler
+	SetupSignalHandler()
+
+	// Simulate sending a termination signal
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 	}()
 
-	// Verify the signal is received
-	select {
-	case sig := <-sigChan:
-		if sig != syscall.SIGTERM {
-			t.Errorf("Expected SIGTERM, got %v", sig)
-		}
-	case <-time.After(500 * time.Millisecond):
-		t.Error("Signal not received")
+	// Wait for the signal to be handled
+	time.Sleep(200 * time.Millisecond)
+
+	// Assert that ExitFunc was called
+	if !called {
+		t.Error("ExitFunc was not called as expected")
 	}
 }

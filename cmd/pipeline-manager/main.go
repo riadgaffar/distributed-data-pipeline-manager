@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	"distributed-data-pipeline-manager/src/config"
 	"distributed-data-pipeline-manager/src/execute_pipeline"
+	"distributed-data-pipeline-manager/src/monitoring"
 	"distributed-data-pipeline-manager/src/orchestrator"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
@@ -90,8 +90,29 @@ func main() {
 		log.Fatalf("ERROR: %v", err)
 	}
 
-	// Start Monitoring and Scaling for Topic
-	go monitorAndScalePartitions(brokers, topic, consumerGroup, threshold, scaleBy, checkInterval)
+	// Start monitoring and scaling in a separate goroutine
+	monitorConfig := monitoring.MonitorConfig{
+		Brokers:       brokers,
+		Topic:         topic,
+		Group:         consumerGroup,
+		Threshold:     threshold,
+		ScaleBy:       scaleBy,
+		CheckInterval: checkInterval,
+	}
+	go monitoring.MonitorAndScale(
+		monitorConfig,
+		func(brokers, group, topic string) (int64, error) {
+			return monitoring.GetConsumerLag(brokers, group, topic)
+		},
+		func(brokers, topic string, newPartitionCount int) error {
+			adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
+			if err != nil {
+				return fmt.Errorf("failed to create Kafka admin client: %w", err)
+			}
+			defer adminClient.Close()
+			return producer.EnsureTopicPartitions(adminClient, topic, newPartitionCount)
+		},
+	)
 
 	// Kafka Producer Initialization
 	kafkaProducer, err := producer.NewKafkaProducer(cfg.App.Kafka.Brokers)
@@ -206,118 +227,4 @@ func initializeParser(parserType string) (parsers.Parser, error) {
 	default:
 		return nil, fmt.Errorf("unsupported parser type: '%s'", parserType)
 	}
-}
-
-// Monitor and scale kafka partitions
-func monitorAndScalePartitions(brokers, topic, group string, threshold, scaleBy int, checkInterval time.Duration) {
-	log.Println("INFO: monitorAndScalePartitions started.")
-	ticker := time.NewTicker(checkInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		// Fetch consumer lag
-		consumerLag, err := getConsumerLag(brokers, group, topic)
-		if err != nil {
-			log.Printf("ERROR: Failed to get consumer lag: %v", err)
-			continue
-		}
-
-		log.Printf("DEBUG: Consumer lag for topic %s: %d", topic, consumerLag)
-
-		// Check against threshold
-		if consumerLag > int64(threshold) {
-			log.Printf("INFO: Consumer lag (%d) exceeds threshold (%d). Scaling partitions...", consumerLag, threshold)
-
-			// Create admin client
-			adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
-			if err != nil {
-				log.Printf("ERROR: Failed to create admin client: %v", err)
-				continue
-			}
-
-			// Ensure the admin client is closed properly
-			func() {
-				defer adminClient.Close()
-
-				metadata, err := adminClient.GetMetadata(&topic, false, 5000)
-				if err != nil {
-					log.Printf("ERROR: Failed to fetch metadata for topic %s: %v", topic, err)
-					return
-				}
-
-				currentPartitions := len(metadata.Topics[topic].Partitions)
-				newPartitionCount := currentPartitions + scaleBy
-
-				// Scale partitions
-				err = producer.EnsureTopicPartitions(adminClient, topic, newPartitionCount)
-				if err != nil {
-					log.Printf("ERROR: Failed to scale partitions for topic %s: %v", topic, err)
-				} else {
-					log.Printf("INFO: Successfully scaled partitions for topic %s to %d", topic, newPartitionCount)
-				}
-			}()
-		}
-	}
-}
-
-// Get consumer lag top manage kafka topics
-func getConsumerLag(brokers, group, topic string) (int64, error) {
-	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{
-		"bootstrap.servers":  brokers,
-		"request.timeout.ms": "10000",
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to create admin client: %w", err)
-	}
-	defer adminClient.Close()
-
-	client, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": brokers,
-		"group.id":          group,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to create kafka client: %w", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	groupPartitions := []kafka.ConsumerGroupTopicPartitions{{
-		Group:      group,
-		Partitions: []kafka.TopicPartition{{Topic: &topic, Partition: kafka.PartitionAny}},
-	}}
-
-	offsetsResult, err := adminClient.ListConsumerGroupOffsets(ctx, groupPartitions)
-	if err != nil {
-		return 0, fmt.Errorf("failed to list consumer group offsets: %w", err)
-	}
-
-	// The result contains the same structure as input, with offsets filled in
-	consumerGroupOffsets := offsetsResult.ConsumerGroupsTopicPartitions[0]
-
-	metadata, err := adminClient.GetMetadata(&topic, false, 5000)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get metadata for topic %s: %w", topic, err)
-	}
-
-	var totalLag int64
-	for _, partition := range metadata.Topics[topic].Partitions {
-		_, high, err := client.GetWatermarkOffsets(topic, partition.ID)
-		if err != nil {
-			return 0, fmt.Errorf("failed to get watermark offsets for partition %d: %w", partition.ID, err)
-		}
-
-		// Find the matching partition in the consumer group offsets
-		for _, p := range consumerGroupOffsets.Partitions {
-			if p.Partition == partition.ID {
-				if p.Offset != kafka.OffsetInvalid && int64(p.Offset) < high {
-					totalLag += high - int64(p.Offset)
-				}
-				break
-			}
-		}
-	}
-
-	return totalLag, nil
 }

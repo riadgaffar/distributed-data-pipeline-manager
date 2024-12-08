@@ -11,15 +11,15 @@ func TestEnableProfiling(t *testing.T) {
 
 	// Start profiling
 	cleanup := EnableProfiling(cpuProfile, memProfile)
-	defer cleanup()
 
 	// Check if profiling files are created
 	defer os.Remove(cpuProfile)
 	defer os.Remove(memProfile)
 
-	// Stop profiling and check file existence
+	// Stop profiling
 	cleanup()
 
+	// Verify file existence
 	if _, err := os.Stat(cpuProfile); os.IsNotExist(err) {
 		t.Errorf("CPU profile not created: %v", err)
 	}
