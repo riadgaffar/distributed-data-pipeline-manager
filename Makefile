@@ -36,8 +36,11 @@ build-debug:
 # Run the application
 .PHONY: run
 run: build docker-up
-	@echo "Application stack is running..."
-	docker compose -f $(DOCKER_COMPOSE) logs --follow
+	@if docker ps | grep $(APP_NAME); then \
+		echo "Application stack is running..."; \
+	else \
+		echo "Application stack has stopped."; \
+	fi
 
 # Run the application with profiling
 .PHONY: run-profile
@@ -55,13 +58,25 @@ debug: build-debug
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker Compose services..."
-	docker compose -f $(DOCKER_COMPOSE) up --build -d
+	docker compose -f $(DOCKER_COMPOSE) up --build --abort-on-container-exit || { \
+		status=$$?; \
+		if [ $$status -eq 2 ]; then \
+			echo "INFO: Containers exited as expected."; \
+			exit 0; \
+		fi; \
+		exit $$status; \
+	}
 
 # Stop Docker Compose
 .PHONY: docker-down
 docker-down:
 	@echo "Stopping and removing all containers..."
 	docker compose -f $(DOCKER_COMPOSE) down -v
+
+.PHONY: logs
+logs:
+	@echo "Streaming Docker Compose logs..."
+	docker compose -f $(DOCKER_COMPOSE) logs --follow
 
 # Clean Docker Networks
 .PHONY: docker-clean-networks

@@ -7,25 +7,18 @@ import (
 	"distributed-data-pipeline-manager/src/orchestrator"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
+	"distributed-data-pipeline-manager/src/server"
+	"distributed-data-pipeline-manager/src/utils"
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"os/signal"
-	"runtime/pprof"
-	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/sirupsen/logrus"
 )
-
-var cpuProfileFile *os.File
-
-// Rearranged Kafka Operations and Message Handling
 
 func main() {
 	// Define and parse flags
@@ -58,16 +51,19 @@ func main() {
 	}
 
 	log.Printf("INFO: Starting pipeline manager on port %d with config: %s\n", *port, *configPath)
-	startServer(*port)
+
+	// Start HTTP server
+	go server.Start(*port)
 
 	log.Println("INFO: Distributed Data Pipeline Manager")
 	setLogLevel(cfg.App.Logger.Level)
 
+	// enableProfiling enables CPU and memory profiling
 	if cfg.App.Profiling {
-		defer enableProfiling()()
+		defer utils.EnableProfiling("cpu.pprof", "mem.pprof")()
 	}
 
-	setupSignalHandler()
+	utils.SetupSignalHandler()
 
 	// Initialize the parser
 	parser, err := initializeParser(cfg.App.Source.Parser)
@@ -84,9 +80,14 @@ func main() {
 	checkInterval := 10 * time.Second
 
 	// Ensure Minimum Partitions for Topic
-	err = ensureTopicPartitions(brokers, topic, 3)
+	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
 	if err != nil {
-		log.Printf("ERROR: Failed to scale partitions for topic %s: %v", topic, err)
+		log.Fatalf("ERROR: Failed to create admin client: %v", err)
+	}
+	defer adminClient.Close()
+
+	if err := producer.EnsureTopicPartitions(adminClient, topic, 3); err != nil {
+		log.Fatalf("ERROR: %v", err)
 	}
 
 	// Start Monitoring and Scaling for Topic
@@ -117,11 +118,14 @@ func main() {
 	}
 
 	orchestrator := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, isTesting, timeout)
+
+	// Run orchestrator
 	if err := orchestrator.Run(); err != nil {
-		log.Fatalf("ERROR: Orchestrator encountered an issue: %v\n", err)
+		log.Fatalf("ERROR: Orchestrator terminated with error: %v\n", err)
 	}
 
-	log.Println("INFO: Pipeline executed successfully.")
+	log.Println("INFO: Application shutdown complete.")
+
 }
 
 // showHelpOptions displays help information
@@ -150,19 +154,6 @@ func validatePort(port int) error {
 		return fmt.Errorf("port number %d is out of range (1-65535)", port)
 	}
 	return nil
-}
-
-// startServer starts the HTTP server on the specified port
-func startServer(port int) {
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-	go func() {
-		if err := http.ListenAndServe(":"+strconv.Itoa(port), nil); err != nil {
-			log.Fatalf("Error starting server: %v", err)
-		}
-	}()
 }
 
 // loadConfig loads the configuration from the CONFIG_PATH environment variable or the --config flag
@@ -201,54 +192,6 @@ func setLogLevel(level string) {
 		logLevel = logrus.InfoLevel
 	}
 	logrus.SetLevel(logLevel)
-}
-
-// enableProfiling enables CPU and memory profiling
-func enableProfiling() func() {
-	var err error
-	cpuProfileFile, err = os.Create("cpu.pprof")
-	if err != nil {
-		log.Fatalf("ERROR: Failed to create CPU profile: %v\n", err)
-	}
-	pprof.StartCPUProfile(cpuProfileFile)
-	log.Println("DEBUG: CPU profiling enabled")
-
-	return func() {
-		pprof.StopCPUProfile()
-		if cpuProfileFile != nil {
-			cpuProfileFile.Close()
-		}
-		log.Println("DEBUG: CPU profiling stopped")
-		writeMemoryProfile()
-	}
-}
-
-// writeMemoryProfile writes the memory profile to a file
-func writeMemoryProfile() {
-	memProfileFile, err := os.Create("mem.pprof")
-	if err != nil {
-		log.Printf("ERROR: Failed to create memory profile: %v\n", err)
-		return
-	}
-	defer memProfileFile.Close()
-
-	if err := pprof.WriteHeapProfile(memProfileFile); err != nil {
-		log.Printf("ERROR: Failed to write memory profile: %v\n", err)
-	} else {
-		log.Println("DEBUG: Memory profiling written to mem.pprof")
-	}
-}
-
-// setupSignalHandler captures termination signals for graceful shutdown
-func setupSignalHandler() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-sigChan
-		log.Println("INFO: Caught termination signal, shutting down...")
-		os.Exit(0)
-	}()
 }
 
 // initializeParser creates a parser based on the provided type
@@ -306,7 +249,7 @@ func monitorAndScalePartitions(brokers, topic, group string, threshold, scaleBy 
 				newPartitionCount := currentPartitions + scaleBy
 
 				// Scale partitions
-				err = ensureTopicPartitions(brokers, topic, newPartitionCount)
+				err = producer.EnsureTopicPartitions(adminClient, topic, newPartitionCount)
 				if err != nil {
 					log.Printf("ERROR: Failed to scale partitions for topic %s: %v", topic, err)
 				} else {
@@ -377,52 +320,4 @@ func getConsumerLag(brokers, group, topic string) (int64, error) {
 	}
 
 	return totalLag, nil
-}
-
-// Application layer dynamic kafka topic partition management
-func ensureTopicPartitions(brokers string, topic string, minPartitions int) error {
-	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
-	if err != nil {
-		return fmt.Errorf("failed to create admin client: %w", err)
-	}
-	defer adminClient.Close()
-
-	// Fetch metadata for the topic
-	metadata, err := adminClient.GetMetadata(&topic, false, 5000)
-	if err != nil {
-		return fmt.Errorf("failed to get topic metadata: %w", err)
-	}
-
-	// Check the current partition count
-	currentPartitions := len(metadata.Topics[topic].Partitions)
-	if currentPartitions >= minPartitions {
-		log.Printf("Topic %s already has %d partitions (min required: %d)", topic, currentPartitions, minPartitions)
-		return nil
-	}
-
-	// Add partitions if the current count is less than required
-	log.Printf("Increasing partitions for topic %s from %d to %d", topic, currentPartitions, minPartitions)
-	results, err := adminClient.CreatePartitions(
-		context.Background(),
-		[]kafka.PartitionsSpecification{
-			{
-				Topic:      topic,
-				IncreaseTo: minPartitions,
-			},
-		},
-		kafka.SetAdminOperationTimeout(5000),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to increase partitions: %w", err)
-	}
-
-	// Log results
-	for _, result := range results {
-		if result.Error.Code() != kafka.ErrNoError {
-			return fmt.Errorf("partition increase failed for topic %s: %v", topic, result.Error)
-		}
-	}
-
-	log.Printf("Partitions for topic %s successfully increased to %d", topic, minPartitions)
-	return nil
 }

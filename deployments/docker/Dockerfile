@@ -48,4 +48,6 @@ COPY config/app-config.yaml /app/config/app-config.yaml
 
 EXPOSE 8080
 
+STOPSIGNAL SIGTERM
+
 ENTRYPOINT ["/app/pipeline_manager"]

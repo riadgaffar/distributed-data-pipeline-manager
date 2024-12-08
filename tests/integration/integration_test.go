@@ -12,7 +12,7 @@ func TestIntegrationPipelineJSON(t *testing.T) {
 	cfg := loadTestConfig(t, "../../tests/integration/configs/test-app-config.yaml")
 
 	// Step 2: Parse JSON test messages
-	messages := parseJSONTestMessages(t, "../../app/data/test-messages.json")
+	messages := parseJSONTestMessages(t, "../../tests/integration/test_data/test-messages.json")
 
 	// Step 3: Produce JSON messages to Kafka
 	produceMessagesToKafka(t, cfg, messages)
