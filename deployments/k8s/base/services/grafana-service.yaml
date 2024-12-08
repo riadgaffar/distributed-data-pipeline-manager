@@ -9,11 +9,10 @@ metadata:
   name: grafana
   namespace: dev
 spec:
-  type: NodePort
+  type: ClusterIP # Use ClusterIP for services accessed via Ingress
   ports:
-    - name: "3000"
+    - name: http
       port: 3000
       targetPort: 3000
-      nodePort: 32000 # Optional: Fixed NodePort, or let Kubernetes assign one
   selector:
     io.kompose.service: grafana

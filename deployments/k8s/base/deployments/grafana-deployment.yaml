@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
-  namespace: dev # Ensure the namespace matches your setup
+  namespace: dev
   annotations:
     kompose.cmd: kompose -f ../docker/docker-compose.yml convert
     kompose.version: 1.34.0 (HEAD)

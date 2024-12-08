@@ -1,4 +1,10 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipeline-manager-config
+  namespace: dev
+  labels:
+    io.kompose.service: pipeline-manager
 data:
   app-config.yaml: |
     app:
@@ -16,9 +22,4 @@ data:
         url: "postgresql://admin:password@postgres:5432/pipelines?sslmode=disable"
         table: "processed_data"
       logger:
-        level: "TRACE"
-kind: ConfigMap
-metadata:
-  labels:
-    io.kompose.service: pipeline-manager
-  name: pipeline-manager-cm1
+        level: "TRACE"                 # Aligned with the environment variable

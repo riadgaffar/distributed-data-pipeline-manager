@@ -21,5 +21,5 @@ spec:
       targetPort: 4195
   selector:
     app: redpanda
-  type: ClusterIP
+  type: NodePort
   

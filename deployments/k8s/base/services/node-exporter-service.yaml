@@ -7,6 +7,7 @@ metadata:
   labels:
     io.kompose.service: node-exporter
   name: node-exporter
+  namespace: dev
 spec:
   ports:
     - name: "9100"

@@ -4,6 +4,7 @@ metadata:
   labels:
     io.kompose.service: redpanda-claim0
   name: redpanda-claim0
+  namespace: dev
 spec:
   accessModes:
     - ReadWriteOnce

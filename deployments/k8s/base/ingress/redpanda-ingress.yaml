@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redpanda-ingress
+  namespace: dev
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "TCP"
+spec:
+  rules:
+    - host: redpanda.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: redpanda
+                port:
+                  number: 9092

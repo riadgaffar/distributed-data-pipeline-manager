@@ -117,4 +117,5 @@ kind: ConfigMap
 metadata:
   labels:
     io.kompose.service: postgres
-  name: postgres-cm1
+  name: postgres-cm0
+  namespace: dev

@@ -22,3 +22,4 @@ metadata:
   labels:
     io.kompose.service: prometheus
   name: prometheus-cm0
+  namespace: dev

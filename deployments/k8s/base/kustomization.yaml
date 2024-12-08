@@ -4,3 +4,4 @@ resources:
   - configmaps/
   - pvc/
   - secrets/
+  - ingress/

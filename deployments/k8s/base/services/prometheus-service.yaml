@@ -7,9 +7,11 @@ metadata:
   labels:
     io.kompose.service: prometheus
   name: prometheus
+  namespace: dev
 spec:
+  type: ClusterIP # Use ClusterIP for services accessed via Ingress
   ports:
-    - name: "9090"
+    - name: http
       port: 9090
       targetPort: 9090
   selector:

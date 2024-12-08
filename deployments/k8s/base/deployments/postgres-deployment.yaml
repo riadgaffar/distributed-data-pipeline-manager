@@ -8,6 +8,7 @@ metadata:
     app: postgres
     io.kompose.service: postgres
   name: postgres
+  namespace: dev
 spec:
   replicas: 1
   selector:
@@ -59,7 +60,7 @@ spec:
             - mountPath: /var/lib/postgresql/data
               name: postgres-claim0
             - mountPath: /docker-entrypoint-initdb.d
-              name: postgres-cm1
+              name: postgres-cm0
           resources:
             requests:
               memory: "256Mi"
@@ -71,6 +72,6 @@ spec:
         - name: postgres-claim0
           persistentVolumeClaim:
             claimName: postgres-claim0
-        - name: postgres-cm1
+        - name: postgres-cm0
           configMap:
-            name: postgres-cm1
+            name: postgres-cm0

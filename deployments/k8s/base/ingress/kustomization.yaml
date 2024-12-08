@@ -1,0 +1,4 @@
+resources:
+  - grafana-ingress.yaml
+  - prometheus-ingress.yaml
+  - redpanda-ingress.yaml

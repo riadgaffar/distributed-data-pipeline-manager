@@ -2,13 +2,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pipeline-manager
+  namespace: dev
 spec:
   replicas: 1
+  selector:  # Add a selector to match the deployment
+    matchLabels:
+      app: pipeline-manager
   template:
+    metadata:
+      labels:
+        app: pipeline-manager
     spec:
       containers:
         - name: pipeline-manager
           image: pipeline-manager:latest
+          imagePullPolicy: IfNotPresent  # Use an appropriate pull policy
           resources:
             requests:
               memory: "128Mi"
@@ -29,8 +37,8 @@ spec:
             - name: GF_SECURITY_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: grafana-secret  # Correct Secret name
-                  key: GF_SECURITY_ADMIN_PASSWORD  # Correct key within the Secret
+                  name: grafana-secret
+                  key: GF_SECURITY_ADMIN_PASSWORD
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
@@ -52,9 +60,18 @@ spec:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:  # Ensure the config file is mounted
+            - name: config-volume
+              mountPath: /app/configs
+      volumes:
+        - name: config-volume
+          configMap:
+            name: pipeline-manager-config  # Ensure this ConfigMap is created
