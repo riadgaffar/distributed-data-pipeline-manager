@@ -2,38 +2,41 @@ package utils
 
 import (
 	"os"
-	"syscall"
+	"sync"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSetupSignalHandler(t *testing.T) {
-	// Override ExitFunc to prevent os.Exit from terminating the test
-	called := false
-	ExitFunc = func(code int) {
-		called = true
-		if code != 0 {
-			t.Errorf("Expected exit code 0, got %d", code)
-		}
+	var (
+		exitCalled bool
+		exitCode   int
+		wg         sync.WaitGroup
+	)
+
+	// Override exitFunc for testing
+	exitFunc = func(code int) {
+		exitCalled = true
+		exitCode = code
+		wg.Done() // Notify test that exitFunc was called
 	}
 
-	// Reset ExitFunc after the test
-	defer func() { ExitFunc = os.Exit }()
+	// Add a wait group counter
+	wg.Add(1)
 
-	// Set up the signal handler
+	// Call SetupSignalHandler
 	SetupSignalHandler()
 
 	// Simulate sending a termination signal
 	go func() {
-		time.Sleep(100 * time.Millisecond)
-		syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+		signalChan <- os.Interrupt
 	}()
 
-	// Wait for the signal to be handled
-	time.Sleep(200 * time.Millisecond)
+	// Wait for the signal handler to execute
+	wg.Wait()
 
-	// Assert that ExitFunc was called
-	if !called {
-		t.Error("ExitFunc was not called as expected")
-	}
+	// Assert that exitFunc was called
+	assert.True(t, exitCalled, "exitFunc should have been called")
+	assert.Equal(t, 0, exitCode, "exitFunc should have been called with code 0")
 }
