@@ -30,50 +30,83 @@ The Distributed Data Pipeline Manager is a robust tool for managing, orchestrati
 # Project structure
 ```plaintext
 distributed-data-pipeline-manager/
+├── cmd/                              # Main application entry points
+│   ├── pipeline-manager/             # Entry point for the pipeline manager
+│   │   └── main.go                   # Main application logic
 ├── config/
 │   ├── app-config.yaml               # Primary dynamic configuration file
-├── README.md
-├── docker-compose.yml
-├── go.mod                            # Module definition
-├── go.sum
-├── main.go                           # Entry point
-├── pipelines/
+├── deployments/                      # Deployment configurations
+│   ├── docker/                       # Docker-related deployment files
+│   │   ├── Dockerfile                # Build instructions for the app
+│   │   ├── docker-compose.yml        # Docker Compose for local deployment
+│   └── k8s/                          # Kubernetes manifests and Helm charts
+│       ├── base/                     # Raw Kubernetes YAML files
+│       │   ├── deployment.yaml       # App deployment manifest
+│       │   ├── service.yaml          # App service manifest
+│       │   ├── configmap.yaml        # App configuration as a ConfigMap
+│       │   ├── secret.yaml           # Secrets for sensitive data
+│       ├── overlays/                 # Environment-specific customizations
+│           ├── dev/                  # Development environment configs
+│           ├── prod/                 # Production environment configs
+├── docs/                            # Documentation for the project
+│   ├── images/                      # Images for README and docs
+├── pipelines/                       # Pipeline templates and configs
 │   └── benthos/
 │       └── pipeline.yaml
 ├── src/
-|   ├── config/
-│   │   └── config_test.go            # Configuration Unit Tests
-│   │   └── config.go                 # Configuration logic
-│   ├── consumer/
-│   │   └── consumer_interface.go     # Consumer Interface
-│   │   └── consumer_test.go          # Consumer Unit Tests
-│   │   └── consumer.go               # Consumer logic
-|   ├── execute_pipeline/
-│   │   └── execute_pipeline_test.go  # Pipeline Execution Unit Tests
-│   │   └── execute_pipeline.go       # Pipeline Execution logic
-|   ├── orchestrator/
-│   │   └── orchestrator.go           # Pipeline lifecycle logic to manage setup, execution, monitoring, and shutdown.
-|   ├── parsers/
-│   │   └── json_parser.go            # JSON Parser logic
-│   │   └── parsers_test.go           # Parsers Unit Tests
-│   │   └── parsers.go                # Parsers logic
-│   ├── producer/
-│   │   └── producer_test.go          # Producer Unit Tests
-│   │   └── producer.go               # Producer logic
-├── docs/                             # images and project documentation
-│── tests/                            # e2e and integration tests
-│   |── integration/
-│   │   ├── configs/                     # Integration test pipeline config
-│   │   │   └── test-app-config.yaml     # Config file specific to integration testing
+│   ├── bootstrap/                   # Application initialization and setup logic
+│   │   ├── bootstrap.go             # Initialization logic for app, Kafka, and parser
+│   │   └── bootstrap_test.go        # Unit tests for bootstrap logic
+│   ├── config/                      # Configuration management
+│   │   ├── config.go                # Configuration loading and validation logic
+│   │   └── config_test.go           # Configuration unit tests
+│   ├── consumer/                    # Consumer logic and interfaces
+│   │   ├── consumer.go              # Consumer implementation
+│   │   ├── consumer_interface.go    # Consumer interface
+│   │   └── consumer_test.go         # Consumer unit tests
+│   ├── execute_pipeline/            # Logic for pipeline execution
+│   │   ├── execute_pipeline.go      # Pipeline execution logic
+│   │   └── execute_pipeline_test.go # Unit tests for pipeline execution
+│   ├── monitoring/                  # Monitoring and scaling logic
+│   │   ├── monitoring.go            # Monitoring for Kafka lag and scaling
+│   │   └── monitoring_test.go       # Unit tests for monitoring logic
+│   ├── orchestrator/                # Pipeline lifecycle orchestration
+│   │   └── orchestrator.go          # Orchestrator logic
+│   ├── parsers/                     # Parsers for input data
+│   │   ├── parsers.go               # Generic parser interface and logic
+│   │   ├── json_parser.go           # JSON parser logic
+│   │   └── parsers_test.go          # Unit tests for parsers
+│   ├── producer/                    # Kafka producer and topic management
+│   │   ├── producer.go              # Producer logic for Kafka
+│   │   ├── producer_test.go         # Producer unit tests
+│   │   └── kafka.go                 # Kafka-specific partition management
+│   ├── server/                      # HTTP server for health checks and metrics
+│   │   ├── server.go                # HTTP server implementation
+│   │   └── server_test.go           # HTTP server unit tests
+│   ├── utils/                       # Utility functions and shared logic
+│   │   ├── signals.go               # Signal handling for graceful shutdown
+│   │   ├── signals_test.go          # Unit tests for signal handling
+│   │   ├── profiling.go             # Profiling utilities
+│   │   ├── profiling_test.go        # Profiling unit tests
+│   │   ├── logger.go                # Logging configuration
+│   │   └── logger_test.go           # Unit tests for logging
+├── tests/                           # e2e and integration tests
+│   ├── integration/                 # Integration test utilities and examples
+│   │   ├── configs/                 # Integration test pipeline config
+│   │   │   └── test-app-config.yaml # Config file specific to integration testing
 │   │   ├── pipelines/
-│   │   │   └── test-pipeline.yaml       # Integration test dynamic pipeline generator template
+│   │   │   └── test-pipeline.yaml   # Integration test dynamic pipeline generator template
 │   │   └── test_data/
-│   │   │   └── test-messages.json       # Example JSON files for test data
-│   │   ├── docker-compose.override.yml  # Integration test-specific Docker Compose
-│   │   ├── Dockerfile                   # Definition of the IT build image for the service
-│   │   ├── helpers.go                   # Shared helper functions for integration tests
-│   │   ├── integration_test.go          # Go test file for integration tests
-
+│   │       └── test-messages.json   # Example JSON files for test data
+│   │   ├── docker-compose.override.yml # Integration test-specific Docker Compose
+│   │   ├── Dockerfile               # Definition of the IT build image for the service
+│   │   ├── helpers.go               # Shared helper functions for integration tests
+│   │   └── integration_test.go      # Go test file for integration tests
+├── go.mod                           # Go module definition
+├── go.sum                           # Go dependencies checksum
+├── Makefile                         # Common commands for building, testing, running
+├── LICENSE                          # License file
+├── README.md                        # Main documentation
 ```
 
 ---
@@ -212,11 +245,12 @@ make reset
 
 ### Overview
 
-The data pipeline follows this workflow:
+The data pipeline follows this data processing workflow:
 
 ```plaintext
 Source (JSON) → Kafka → Processors → Outputs (Postgres, Kafka, Logs)
 ```
+![Memory Graph](docs/images/ddpm_wf.png)
 
 **Example Pipeline Configuration (Generated at Runtime)**
 ```yaml

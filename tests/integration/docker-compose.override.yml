@@ -1,6 +1,7 @@
 services:
   test-postgres:
     image: postgres:17
+    container_name: test-postgres
     environment:
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_pass
@@ -9,7 +10,7 @@ services:
       - "5433:5432"
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
-      - ../../init-scripts:/docker-entrypoint-initdb.d/
+      - ../../deployments/docker/init-scripts:/docker-entrypoint-initdb.d/
     profiles:
       - testing
     healthcheck:
@@ -20,6 +21,7 @@ services:
 
   test-redpanda:
     image: docker.redpanda.com/vectorized/redpanda:latest
+    container_name: test-redpanda
     command:
       - redpanda
       - start
@@ -45,6 +47,8 @@ services:
       start_period: 30s
 
   test-pipeline-manager:
+    image: test-pipeline-manager:latest
+    container_name: test-pipeline-manager
     build:
       context: ../../  # Set to the project root
       dockerfile: tests/integration/Dockerfile

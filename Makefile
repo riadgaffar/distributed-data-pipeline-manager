@@ -1,16 +1,16 @@
 # Variables
+PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 APP_NAME := pipeline_manager
 SRC_DIR := src
-BIN_DIR := bin
+CMD_DIR := $(PROJECT_ROOT)/cmd/pipeline-manager
+BIN_DIR := $(PROJECT_ROOT)/bin
 BIN_PATH := $(BIN_DIR)/$(APP_NAME)
-DOCKER_COMPOSE := docker-compose.yml
-POSTGRES_DATA := postgres-data
+DOCKER_COMPOSE := $(PROJECT_ROOT)/deployments/docker/docker-compose.yml
+POSTGRES_DATA := $(PROJECT_ROOT)/deployments/docker/postgres-data
+REDPANDA_DATA := $(PROJECT_ROOT)/deployments/docker/redpanda-data
+CONFIG_PATH := $(PROJECT_ROOT)/config/app-config.yaml
 IT_POSTGRES_DATA := tests/integration/postgres-data
-REDPANDA_DATA := redpanda-data
 IT_REDPANDA_DATA := tests/integration/redpanda-data
-CONFIG_PATH := config/app-config.yaml
-WORK_DIR := $(shell dirname $(realpath main.go))
-COMPOSE_FILES := -f docker-compose.yml -f ./tests/integration/docker-compose.override.yml
 TEST_DIRS := $(shell go list ./... | grep -v 'tests/integration')
 
 # Default target
@@ -22,7 +22,7 @@ all: build
 build:
 	@echo "Building the application..."
 	mkdir -p $(BIN_DIR)
-	cd $(WORK_DIR) && go build -o $(BIN_PATH) main.go
+	cd $(CMD_DIR) && go build -o $(BIN_PATH) main.go
 	@echo "Build complete: $(BIN_PATH)"
 
 # Build the Go binary with debug flags
@@ -30,44 +30,67 @@ build:
 build-debug:
 	@echo "Building the application with debug flags..."
 	mkdir -p $(BIN_DIR)
-	cd $(WORK_DIR) && go build -gcflags="all=-N -l" -o $(BIN_PATH) main.go
+	cd $(CMD_DIR) && go build -gcflags="all=-N -l" -o $(BIN_PATH) main.go
 	@echo "Build complete: $(BIN_PATH)"
-	
+
 # Run the application
 .PHONY: run
 run: build docker-up
-	@echo "Running the application..."
-	cd $(WORK_DIR) && CONFIG_PATH=$(CONFIG_PATH) ./$(BIN_PATH)
+	@if docker ps | grep $(APP_NAME); then \
+		echo "Application stack is running..."; \
+	else \
+		echo "Application stack has stopped."; \
+	fi
 
 # Run the application with profiling
 .PHONY: run-profile
 run-profile: build docker-up
 	@echo "Running the application with profiling enabled..."
-	cd $(WORK_DIR) && CONFIG_PATH=$(CONFIG_PATH) ./$(BIN_PATH) -profile=true
+	CONFIG_PATH=$(CONFIG_PATH) $(BIN_PATH) -profile=true
 
 # Debug the application using Delve
 .PHONY: debug
 debug: build-debug
 	@echo "Starting debug mode..."
-	cd $(WORK_DIR) && dlv exec ./$(BIN_PATH)
+	dlv exec ./$(BIN_PATH)
 
 # Run Docker Compose
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker Compose services..."
-	docker compose -f $(DOCKER_COMPOSE) up -d
+	docker compose -f $(DOCKER_COMPOSE) up --build --abort-on-container-exit || { \
+		status=$$?; \
+		if [ $$status -eq 2 ]; then \
+			echo "INFO: Containers exited as expected."; \
+			exit 0; \
+		fi; \
+		exit $$status; \
+	}
 
 # Stop Docker Compose
 .PHONY: docker-down
 docker-down:
 	@echo "Stopping and removing all containers..."
-	docker compose $(COMPOSE_FILES) down -v
+	docker compose -f $(DOCKER_COMPOSE) down -v
+
+.PHONY: logs
+logs:
+	@echo "Streaming Docker Compose logs..."
+	docker compose -f $(DOCKER_COMPOSE) logs --follow
+
+# Clean Docker Networks
+.PHONY: docker-clean-networks
+docker-clean-networks:
+	@echo "Cleaning docker build networks..."
+	docker network prune -f 
+	@echo "Docker build networks clean complete."
+
 
 # Clean Docker Build Cache
 .PHONY: docker-clean-cache
 docker-clean-cache:
 	@echo "Cleaning docker build cache..."
-	docker builder prune -f
+	docker builder prune --all -f
 	@echo "Docker build cache clean complete."
 
 # Clean up data artifacts
@@ -89,6 +112,34 @@ clean:
 	go clean -modcache 
 	go clean -testcache
 	@echo "Binary clean complete."
+
+# Debug target to print paths and environment info
+.PHONY: debug-info
+debug-info:
+	@echo "Project root: $(PROJECT_ROOT)"
+	@echo "Binary path: $(BIN_PATH)"
+	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
+
+.PHONY: integration-test
+integration-test:
+	@echo "Running integration tests..."
+	# Build the Docker images for integration testing
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
+	
+	# Start the containers and run the tests, exiting with the code of test-pipeline-manager
+	docker compose --profile testing -f tests/integration/docker-compose.override.yml up --exit-code-from test-pipeline-manager
+	
+	# Capture logs (optional)
+	docker compose -f tests/integration/docker-compose.override.yml logs
+	
+	@echo "Integration tests completed successfully."
+
+# Run Go tests
+.PHONY: test
+test:
+	@echo "Running unit tests..."
+	cd $(CMD_DIR) && go test -v $(TEST_DIRS)
+	@echo "Unit test run complete."
 
 # Clean up integration test containers and volumes
 .PHONY: integration-clean
@@ -115,34 +166,5 @@ rm-generated-pipeline-config:
 
 # Full reset (clean + docker down)
 .PHONY: reset
-reset: clean docker-clean-cache docker-down rm-kafka-topics data-clean rm-generated-pipeline-config integration-clean
+reset: clean docker-down rm-kafka-topics data-clean rm-generated-pipeline-config integration-clean docker-clean-networks docker-clean-cache
 	@echo "Project reset complete."
-
-# Debug target to print paths and environment info
-.PHONY: debug-info
-debug-info:
-	@echo "Current working directory: $(WORK_DIR)"
-	@echo "Binary path: $(BIN_PATH)"
-	@echo "Source directory: $(SRC_DIR)"
-	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
-
-.PHONY: integration-test
-integration-test:
-	@echo "Running integration tests..."
-	# Build the Docker images for integration testing
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
-	
-	# Start the containers and run the tests, exiting with the code of test-pipeline-manager
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml up --exit-code-from test-pipeline-manager
-	
-	# Capture logs (optional)
-	docker compose -f tests/integration/docker-compose.override.yml logs
-	
-	@echo "Integration tests completed successfully."
-
-# Run Go tests
-.PHONY: test
-test:
-	@echo "Running unit tests..."
-	cd $(WORK_DIR) && go test -v $(TEST_DIRS)
-	@echo "Test run complete."

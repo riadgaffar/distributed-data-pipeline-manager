@@ -44,6 +44,12 @@ func (r *RealCommandExecutor) ExecuteCommand(name string, args ...string) error 
 // ExecutePipeline runs the pipeline using the provided CommandExecutor.
 // ExecutePipeline generates a dynamic pipeline configuration and runs it using rpk.
 func ExecutePipeline(configPath string, executor CommandExecutor) error {
+	log.Printf("DEBUG: ExecutePipeline called with configPath: %s, options: %+v", configPath, executor)
+
+	if executor == nil {
+		return fmt.Errorf("command options cannot be nil")
+	}
+
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)

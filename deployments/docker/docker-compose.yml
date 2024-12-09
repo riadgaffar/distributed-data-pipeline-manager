@@ -1,7 +1,12 @@
+networks:
+  ddpm_network:
+    name: ddpm_network
+    driver: bridge
+
 services:
-  # Existing Redpanda service
   redpanda:
     image: docker.redpanda.com/vectorized/redpanda:latest
+    container_name: redpanda
     ports:
       - "9092:9092"
       - "9644:9644"
@@ -16,16 +21,21 @@ services:
       - --node-id 0
       - --check=false
       - --kafka-addr=PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
     volumes:
       - ./redpanda-data:/var/lib/redpanda/data
     networks:
       - ddpm_network
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
-  # Existing Postgres service
   postgres:
     image: postgres:17
-    container_name: postgres-container
+    container_name: postgres
     ports:
       - "5432:5432"
     environment:
@@ -40,6 +50,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
       - ddpm_network
 
@@ -72,15 +83,39 @@ services:
   
   node-exporter:
     image: prom/node-exporter
+    container_name: node-exporter
     ports:
       - "9100:9100"
+    networks:
+      - ddpm_network
+
+  pipeline-manager:
+    image: pipeline-manager:latest
+    container_name: pipeline-manager
+    build:
+      context: ../../  # Use the project root as the build context
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      CONFIG_PATH: /app/config/app-config.yaml
+    volumes:
+      - ../../pipelines:/app/pipelines
+      - ../../tests/integration/configs:/app/configs
+    depends_on:
+      - redpanda
+      - postgres
+    networks:
+      - ddpm_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://0.0.0.0:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres-data:
   redpanda-data:
   prometheus-config:
   grafana-data:
-
-networks:
-  ddpm_network:
-    driver: bridge

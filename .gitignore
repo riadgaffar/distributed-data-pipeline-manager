@@ -3,4 +3,4 @@ bin
 postgres-data
 redpanda-data
 pipelines/benthos/generated-pipeline.yaml
-grafana-data
+**/.DS_Store

@@ -1,4 +1,31 @@
--- Load necessary extensions
+-- ========================
+-- CREATE ADMIN DATABASE
+-- ========================
+-- Enable dblink extension
+CREATE EXTENSION IF NOT EXISTS dblink;
+
+-- ========================
+-- CREATE ADMIN DATABASE
+-- ========================
+-- Check if the admin database exists; if not, create it
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_database
+        WHERE datname = 'admin'
+    ) THEN
+        RAISE NOTICE 'Creating admin database...';
+        PERFORM dblink_exec('dbname=' || current_database(), 'CREATE DATABASE admin');
+    ELSE
+        RAISE NOTICE 'Admin database already exists.';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ========================
+-- Load necessary extensions in the pipelines database
+-- ========================
 CREATE EXTENSION IF NOT EXISTS pg_stat_statements; -- For query performance monitoring
 CREATE EXTENSION IF NOT EXISTS pgcrypto; -- For cryptographic functions
 

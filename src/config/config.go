@@ -7,6 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type RealConfigLoader struct{}
+
 // AppConfig defines the structure for dynamic configuration
 type AppConfig struct {
 	App struct {
@@ -15,7 +17,6 @@ type AppConfig struct {
 		GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
 		Source                 struct {
 			Parser string `yaml:"parser"`
-			File   string `yaml:"file"`
 		} `yaml:"source"`
 		Kafka struct {
 			Brokers       []string `yaml:"brokers"`
@@ -61,4 +62,12 @@ func LoadConfig(explicitPath ...string) (*AppConfig, error) {
 	}
 
 	return &config, nil
+}
+
+func NewConfigLoader() *RealConfigLoader {
+	return &RealConfigLoader{}
+}
+
+func (l *RealConfigLoader) LoadConfig(path string) (*AppConfig, error) {
+	return LoadConfig(path)
 }

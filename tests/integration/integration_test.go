@@ -7,14 +7,14 @@ import (
 )
 
 // TestIntegrationPipeline validates the complete pipeline execution.
-func TestIntegrationPipeline(t *testing.T) {
+func TestIntegrationPipelineJSON(t *testing.T) {
 	// Step 1: Load configuration
 	cfg := loadTestConfig(t, "../../tests/integration/configs/test-app-config.yaml")
 
-	// Step 2: Parse test messages
-	messages := parseTestMessages(t, cfg.App.Source.File)
+	// Step 2: Parse JSON test messages
+	messages := parseJSONTestMessages(t, "../../tests/integration/test_data/test-messages.json")
 
-	// Step 3: Produce messages to Kafka
+	// Step 3: Produce JSON messages to Kafka
 	produceMessagesToKafka(t, cfg, messages)
 
 	// Step 4: Execute the pipeline
