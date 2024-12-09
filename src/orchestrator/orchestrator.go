@@ -15,19 +15,22 @@ import (
 type Orchestrator struct {
 	config    *config.AppConfig
 	executor  execute_pipeline.CommandExecutor
+	producer  producer.Producer
 	stopChan  chan os.Signal
 	timeout   time.Duration
 	isTesting bool
 }
 
 // NewOrchestrator creates a new pipeline orchestrator
-func NewOrchestrator(cfg *config.AppConfig, executor execute_pipeline.CommandExecutor, isTesting bool, timeout time.Duration) *Orchestrator {
+// func NewOrchestrator(cfg *config.AppConfig, executor execute_pipeline.CommandExecutor, producer producer.KafkaProducer, isTesting bool, timeout time.Duration) *Orchestrator {
+func NewOrchestrator(cfg *config.AppConfig, executor execute_pipeline.CommandExecutor, producer producer.Producer, isTesting bool, timeout time.Duration) *Orchestrator {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	return &Orchestrator{
 		config:    cfg,
 		executor:  executor,
+		producer:  producer,
 		stopChan:  stopChan,
 		timeout:   timeout,
 		isTesting: isTesting,
@@ -38,18 +41,12 @@ func NewOrchestrator(cfg *config.AppConfig, executor execute_pipeline.CommandExe
 func (o *Orchestrator) Run() error {
 	log.Println("INFO: Starting pipeline orchestrator")
 
-	// Start Kafka producer
-	log.Println("DEBUG: Starting Kafka producer...")
-	kafkaProducer, err := producer.NewKafkaProducer(o.config.App.Kafka.Brokers)
-	if err != nil {
-		return err
-	}
-	defer kafkaProducer.Close()
+	defer o.producer.Close()
 
 	// Execute pipeline
 	log.Println("DEBUG: Executing pipeline...")
 	go func() {
-		err = execute_pipeline.ExecutePipeline(os.Getenv("CONFIG_PATH"), o.executor)
+		err := execute_pipeline.ExecutePipeline(os.Getenv("CONFIG_PATH"), o.executor)
 		if err != nil {
 			log.Printf("ERROR: Pipeline execution failed: %v\n", err)
 			os.Exit(1)

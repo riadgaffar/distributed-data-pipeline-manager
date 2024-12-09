@@ -72,40 +72,23 @@ func InitializeParser(parserType string) (parsers.Parser, error) {
 }
 
 // InitializeKafka ensures Kafka topics are properly configured and starts monitoring.
-func InitializeKafka(cfg *config.AppConfig, adminClientFactory func(string) (producer.AdminClient, error)) error {
+func InitializeKafka(cfg *config.AppConfig, adminClientFactory func(string) (producer.AdminClient, error)) (producer.AdminClient, error) {
 	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
-	topic := strings.Join(cfg.App.Kafka.Topics, ",")
-	consumerGroup := cfg.App.Kafka.ConsumerGroup
-
-	// Create the admin client using the provided factory function
 	adminClient, err := adminClientFactory(brokers)
 	if err != nil {
-		return fmt.Errorf("failed to create Kafka admin client: %w", err)
+		return nil, fmt.Errorf("failed to create Kafka AdminClient: %w", err)
 	}
-	defer adminClient.Close()
 
 	// Ensure topic partitions
-	if err := producer.EnsureTopicPartitions(adminClient, topic, 3); err != nil {
-		return fmt.Errorf("failed to ensure topic partitions: %w", err)
+	for _, topic := range cfg.App.Kafka.Topics {
+		if err := producer.EnsureTopicPartitions(adminClient, topic, 3); err != nil {
+			adminClient.Close() // Ensure cleanup on error
+			return nil, fmt.Errorf("failed to ensure topic partitions for topic %s: %w", topic, err)
+		}
 	}
 
-	// Start monitoring and scaling
-	monitorConfig := monitoring.MonitorConfig{
-		Brokers:       brokers,
-		Topic:         topic,
-		Group:         consumerGroup,
-		Threshold:     10000,
-		ScaleBy:       2,
-		CheckInterval: 10 * time.Second,
-	}
-	go monitoring.MonitorAndScale(
-		monitorConfig,
-		monitoring.GetConsumerLag,
-		ensureTopicPartitionsWrapper,
-	)
-
-	log.Println("INFO: Kafka initialization and monitoring started.")
-	return nil
+	log.Println("INFO: Kafka AdminClient initialized and topic partitions ensured.")
+	return adminClient, nil
 }
 
 func validateInputs(configPath string, port int) {
@@ -154,6 +137,52 @@ func loadConfig(configPathFlag string) (*config.AppConfig, error) {
 	return cfg, nil
 }
 
+// createAdminClient creates a Kafka AdminClient using the provided factory.
+func createAdminClient(cfg *config.AppConfig, adminClientFactory func(string) (producer.AdminClient, error)) (producer.AdminClient, error) {
+	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
+	adminClient, err := adminClientFactory(brokers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kafka admin client: %w", err)
+	}
+	log.Println("INFO: Kafka AdminClient created successfully.")
+	return adminClient, nil
+}
+
+// ensureTopicPartitions ensures the configured Kafka topics have sufficient partitions.
+func ensureTopicPartitions(cfg *config.AppConfig, adminClient producer.AdminClient) error {
+	for _, topic := range cfg.App.Kafka.Topics {
+		if err := producer.EnsureTopicPartitions(adminClient, topic, 3); err != nil {
+			return fmt.Errorf("failed to ensure topic partitions for topic %s: %w", topic, err)
+		}
+	}
+	log.Println("INFO: All topic partitions ensured.")
+	return nil
+}
+
+// startMonitoring initializes Kafka topic monitoring and scaling.
+func startMonitoring(cfg *config.AppConfig) {
+	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
+	consumerGroup := cfg.App.Kafka.ConsumerGroup
+	topic := strings.Join(cfg.App.Kafka.Topics, ",")
+
+	monitorConfig := monitoring.MonitorConfig{
+		Brokers:       brokers,
+		Topic:         topic,
+		Group:         consumerGroup,
+		Threshold:     10000,
+		ScaleBy:       2,
+		CheckInterval: 10 * time.Second,
+	}
+
+	go monitoring.MonitorAndScale(
+		monitorConfig,
+		monitoring.GetConsumerLag,
+		ensureTopicPartitionsWrapper,
+	)
+	log.Println("INFO: Monitoring started for Kafka topics.")
+}
+
+// ensureTopicPartitionsWrapper is a utility to create a new AdminClient and ensure topic partitions.
 func ensureTopicPartitionsWrapper(brokers string, topic string, minPartitions int) error {
 	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
 	if err != nil {
@@ -163,3 +192,13 @@ func ensureTopicPartitionsWrapper(brokers string, topic string, minPartitions in
 
 	return producer.EnsureTopicPartitions(adminClient, topic, minPartitions)
 }
+
+// func ensureTopicPartitionsWrapper(brokers string, topic string, minPartitions int) error {
+// 	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
+// 	if err != nil {
+// 		return fmt.Errorf("failed to create Kafka admin client: %w", err)
+// 	}
+// 	defer adminClient.Close()
+
+// 	return producer.EnsureTopicPartitions(adminClient, topic, minPartitions)
+// }
