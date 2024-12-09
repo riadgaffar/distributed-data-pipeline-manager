@@ -178,3 +178,32 @@ func TestLoadConfig_EnvOverride(t *testing.T) {
 		t.Errorf("expected Kafka Broker %s, got %s", mockConfig.App.Kafka.Brokers[0], loadedConfig.App.Kafka.Brokers[0])
 	}
 }
+
+func TestRealConfigLoader_LoadConfig(t *testing.T) {
+	// Create a mock configuration
+	mockConfig := mockAppConfig()
+	tmpFile := writeMockConfigFile(t, mockConfig)
+	defer os.Remove(tmpFile)
+
+	loader := NewConfigLoader()
+
+	// Test with explicit path
+	config, err := loader.LoadConfig(tmpFile)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// Validate loaded config
+	if config.App.Kafka.ConsumerGroup != mockConfig.App.Kafka.ConsumerGroup {
+		t.Errorf("expected ConsumerGroup %s, got %s",
+			mockConfig.App.Kafka.ConsumerGroup,
+			config.App.Kafka.ConsumerGroup)
+	}
+}
+
+func TestNewConfigLoader(t *testing.T) {
+	loader := NewConfigLoader()
+	if loader == nil {
+		t.Error("expected non-nil ConfigLoader")
+	}
+}

@@ -98,7 +98,16 @@ func startOrchestrator(cfg *config.AppConfig, kafkaProducer *producer.KafkaProdu
 		timeout = 30 * time.Second
 	}
 
-	orchestratorInstance := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, kafkaProducer, isTesting, timeout)
+	configLoader := config.NewConfigLoader()
+	orchestratorInstance := orchestrator.NewOrchestrator(
+		configLoader,
+		cfg,
+		&execute_pipeline.RealCommandExecutor{},
+		kafkaProducer,
+		isTesting,
+		timeout,
+	)
+
 	if err := orchestratorInstance.Run(); err != nil {
 		log.Fatalf("ERROR: Orchestrator terminated with error: %v", err)
 	}

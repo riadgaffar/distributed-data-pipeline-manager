@@ -12,28 +12,33 @@ import (
 )
 
 // Orchestrator manages the lifecycle of the pipeline
+type ConfigLoader interface {
+	LoadConfig(string) (*config.AppConfig, error)
+}
+
 type Orchestrator struct {
-	config    *config.AppConfig
-	executor  execute_pipeline.CommandExecutor
-	producer  producer.Producer
-	stopChan  chan os.Signal
-	timeout   time.Duration
-	isTesting bool
+	configLoader ConfigLoader
+	config       *config.AppConfig
+	executor     execute_pipeline.CommandExecutor
+	producer     producer.Producer
+	stopChan     chan os.Signal
+	timeout      time.Duration
+	isTesting    bool
 }
 
 // NewOrchestrator creates a new pipeline orchestrator
-// func NewOrchestrator(cfg *config.AppConfig, executor execute_pipeline.CommandExecutor, producer producer.KafkaProducer, isTesting bool, timeout time.Duration) *Orchestrator {
-func NewOrchestrator(cfg *config.AppConfig, executor execute_pipeline.CommandExecutor, producer producer.Producer, isTesting bool, timeout time.Duration) *Orchestrator {
+func NewOrchestrator(configLoader ConfigLoader, cfg *config.AppConfig, executor execute_pipeline.CommandExecutor, producer producer.Producer, isTesting bool, timeout time.Duration) *Orchestrator {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
 	return &Orchestrator{
-		config:    cfg,
-		executor:  executor,
-		producer:  producer,
-		stopChan:  stopChan,
-		timeout:   timeout,
-		isTesting: isTesting,
+		configLoader: configLoader,
+		config:       cfg,
+		executor:     executor,
+		producer:     producer,
+		stopChan:     stopChan,
+		timeout:      timeout,
+		isTesting:    isTesting,
 	}
 }
 

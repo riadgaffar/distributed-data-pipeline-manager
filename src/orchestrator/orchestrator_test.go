@@ -185,24 +185,19 @@ func TestOrchestrator_Run(t *testing.T) {
 	// Create mock config
 	mockConfig := createTestConfig()
 
-	// Setup mock config loader
-	mockConfigLoader := new(MockConfigLoader)
-	mockConfigLoader.On("LoadConfig", mock.AnythingOfType("string")).Return(mockConfig, nil)
-
 	tests := []struct {
 		name          string
 		timeout       time.Duration
-		setupMocks    func(*MockCommandExecutor, *MockKafkaProducer, *MockConfigLoader)
+		setupMocks    func(*MockCommandExecutor, *MockKafkaProducer)
 		expectedError error
 	}{
 		{
 			name:    "successful pipeline execution",
 			timeout: 2 * time.Second,
-			setupMocks: func(executor *MockCommandExecutor, producer *MockKafkaProducer, configLoader *MockConfigLoader) {
+			setupMocks: func(executor *MockCommandExecutor, producer *MockKafkaProducer) {
 				executor.On("ExecuteCommand", "rpk", "connect", "run", mock.AnythingOfType("string")).Return(nil)
 				executor.On("StopPipeline").Return(nil)
 				producer.On("Close").Return()
-				configLoader.On("LoadConfig", mock.AnythingOfType("string")).Return(mockConfig, nil)
 			},
 			expectedError: nil,
 		},
@@ -210,18 +205,23 @@ func TestOrchestrator_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup mocks
 			mockExecutor := new(MockCommandExecutor)
 			mockProducer := new(MockKafkaProducer)
-			tt.setupMocks(mockExecutor, mockProducer, mockConfigLoader)
+			mockConfigLoader := new(MockConfigLoader)
 
-			// Create orchestrator
-			orchestrator := NewOrchestrator(mockConfig, mockExecutor, mockProducer, true, tt.timeout)
+			tt.setupMocks(mockExecutor, mockProducer)
 
-			// Run orchestrator
+			orchestrator := NewOrchestrator(
+				mockConfigLoader,
+				mockConfig,
+				mockExecutor,
+				mockProducer,
+				true,
+				tt.timeout,
+			)
+
 			err := orchestrator.Run()
 
-			// Assertions
 			if tt.expectedError != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.expectedError.Error(), err.Error())
@@ -229,7 +229,6 @@ func TestOrchestrator_Run(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			// Verify expectations
 			mockExecutor.AssertExpectations(t)
 			mockProducer.AssertExpectations(t)
 			mockConfigLoader.AssertExpectations(t)
