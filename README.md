@@ -245,11 +245,12 @@ make reset
 
 ### Overview
 
-The data pipeline follows this workflow:
+The data pipeline follows this data processing workflow:
 
 ```plaintext
 Source (JSON) → Kafka → Processors → Outputs (Postgres, Kafka, Logs)
 ```
+![Memory Graph](docs/images/ddpm_wf.png)
 
 **Example Pipeline Configuration (Generated at Runtime)**
 ```yaml
