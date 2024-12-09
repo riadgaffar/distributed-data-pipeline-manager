@@ -3,14 +3,12 @@ package bootstrap
 import (
 	"context"
 	"distributed-data-pipeline-manager/src/config"
-	"distributed-data-pipeline-manager/src/monitoring"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
 	"fmt"
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
@@ -45,12 +43,15 @@ func (k *KafkaAdminClient) Close() {
 
 // InitializeApp initializes the application configuration and validates inputs.
 func InitializeApp(configPath string, port int) (*config.AppConfig, error) {
-	validateInputs(configPath, port)
+	// Validate port first
+	if port < 1 || port > 65535 {
+		return nil, fmt.Errorf("port number %d is out of range (1-65535)", port)
+	}
 
-	// Load configuration
+	// Load configuration (this handles path precedence)
 	cfg, err := loadConfig(configPath)
 	if err != nil {
-		log.Fatalf("ERROR: %v\n", err)
+		return nil, err
 	}
 
 	log.Printf("INFO: Application initialized with config: %s on port %d\n", configPath, port)
@@ -91,40 +92,22 @@ func InitializeKafka(cfg *config.AppConfig, adminClientFactory func(string) (pro
 	return adminClient, nil
 }
 
-func validateInputs(configPath string, port int) {
-	if configPath == "" {
-		log.Println("INFO: --config flag not provided, configPath is empty.")
-	} else {
-		if err := validateConfigPath(configPath); err != nil {
-			log.Fatalf("Invalid configuration path: %v\n", err)
-		}
-	}
-
-	if port < 1 || port > 65535 {
-		log.Fatalf("ERROR: Port number %d is out of range (1-65535)", port)
-	}
-}
-
-func validateConfigPath(configPath string) error {
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("configuration file does not exist: %s", configPath)
-	}
-	return nil
-}
-
 func loadConfig(configPathFlag string) (*config.AppConfig, error) {
 	// Determine configuration path precedence
 	configPath := os.Getenv("CONFIG_PATH")
 	if configPath == "" {
 		configPath = configPathFlag
+		if configPath == "" {
+			return nil, fmt.Errorf("configuration path is required: neither CONFIG_PATH env var nor --config flag provided")
+		}
 		log.Printf("INFO: CONFIG_PATH not set, using --config flag value: %s", configPath)
 	} else {
 		log.Printf("INFO: Using CONFIG_PATH environment variable: %s", configPath)
 	}
 
 	// Validate the configuration path
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("configuration file does not exist: %s", configPath)
+	if err := validateConfigPath(configPath); err != nil {
+		return nil, fmt.Errorf("invalid configuration path: %w", err)
 	}
 
 	// Load the configuration
@@ -133,72 +116,12 @@ func loadConfig(configPathFlag string) (*config.AppConfig, error) {
 		return nil, fmt.Errorf("failed to load configuration from %s: %w", configPath, err)
 	}
 
-	log.Printf("INFO: Loaded configuration: %+v", cfg)
 	return cfg, nil
 }
 
-// createAdminClient creates a Kafka AdminClient using the provided factory.
-func createAdminClient(cfg *config.AppConfig, adminClientFactory func(string) (producer.AdminClient, error)) (producer.AdminClient, error) {
-	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
-	adminClient, err := adminClientFactory(brokers)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Kafka admin client: %w", err)
+func validateConfigPath(configPath string) error {
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return fmt.Errorf("configuration file does not exist: %s", configPath)
 	}
-	log.Println("INFO: Kafka AdminClient created successfully.")
-	return adminClient, nil
-}
-
-// ensureTopicPartitions ensures the configured Kafka topics have sufficient partitions.
-func ensureTopicPartitions(cfg *config.AppConfig, adminClient producer.AdminClient) error {
-	for _, topic := range cfg.App.Kafka.Topics {
-		if err := producer.EnsureTopicPartitions(adminClient, topic, 3); err != nil {
-			return fmt.Errorf("failed to ensure topic partitions for topic %s: %w", topic, err)
-		}
-	}
-	log.Println("INFO: All topic partitions ensured.")
 	return nil
 }
-
-// startMonitoring initializes Kafka topic monitoring and scaling.
-func startMonitoring(cfg *config.AppConfig) {
-	brokers := strings.Join(cfg.App.Kafka.Brokers, ",")
-	consumerGroup := cfg.App.Kafka.ConsumerGroup
-	topic := strings.Join(cfg.App.Kafka.Topics, ",")
-
-	monitorConfig := monitoring.MonitorConfig{
-		Brokers:       brokers,
-		Topic:         topic,
-		Group:         consumerGroup,
-		Threshold:     10000,
-		ScaleBy:       2,
-		CheckInterval: 10 * time.Second,
-	}
-
-	go monitoring.MonitorAndScale(
-		monitorConfig,
-		monitoring.GetConsumerLag,
-		ensureTopicPartitionsWrapper,
-	)
-	log.Println("INFO: Monitoring started for Kafka topics.")
-}
-
-// ensureTopicPartitionsWrapper is a utility to create a new AdminClient and ensure topic partitions.
-func ensureTopicPartitionsWrapper(brokers string, topic string, minPartitions int) error {
-	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
-	if err != nil {
-		return fmt.Errorf("failed to create Kafka admin client: %w", err)
-	}
-	defer adminClient.Close()
-
-	return producer.EnsureTopicPartitions(adminClient, topic, minPartitions)
-}
-
-// func ensureTopicPartitionsWrapper(brokers string, topic string, minPartitions int) error {
-// 	adminClient, err := kafka.NewAdminClient(&kafka.ConfigMap{"bootstrap.servers": brokers})
-// 	if err != nil {
-// 		return fmt.Errorf("failed to create Kafka admin client: %w", err)
-// 	}
-// 	defer adminClient.Close()
-
-// 	return producer.EnsureTopicPartitions(adminClient, topic, minPartitions)
-// }
