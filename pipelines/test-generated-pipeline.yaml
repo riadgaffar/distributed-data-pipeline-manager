@@ -1,0 +1,63 @@
+# Input section: Consumes data from Kafka
+input:
+  kafka:
+    addresses: ["test-redpanda:29092"]
+    topics: ["test-topic"]
+    consumer_group: "test-group"
+    start_from_oldest: true
+
+# Pipeline section: Processes and transforms data
+pipeline:
+  processors:
+    - dedupe:
+        cache: dedup_cache
+        key: "${! content() }"
+    - mapping: |
+        root.id = uuid_v4()
+        root.timestamp = now()
+        root.data = content().uppercase()
+    - switch:
+        - check: "\"DEBUG\" == \"DEBUG\""
+          processors:
+            - log:
+                level: "DEBUG"
+                message: 'Inserting record into SQL: ${! json() }'
+
+# Output section: Routes data to multiple destinations
+output:
+  fallback:
+    - retry:
+        max_retries: 3
+        backoff:
+          initial_interval: 500ms
+        output:
+          sql_insert:
+            driver: postgres
+            dsn: "postgresql://test_user:test_pass@test-postgres:5432/test_db?sslmode=disable"
+            table: "processed_data"
+            columns: ["id", "timestamp", "data"]
+            args_mapping: |
+              root = [
+                this.id,
+                this.timestamp,
+                this.data
+              ]
+            suffix: ON CONFLICT (data, timestamp) DO UPDATE SET timestamp = EXCLUDED.timestamp
+            max_in_flight: 1
+
+    - redpanda:
+        seed_brokers: ["test-redpanda:29092"]
+        topic: "failed-messages"
+        compression: gzip
+
+    - stdout: {}
+
+# Logger section: Controls logging verbosity
+logger:
+  level: "DEBUG"
+
+# Cache resources section: Define the cache for deduplication
+cache_resources:
+  - label: dedup_cache
+    memory:
+      default_ttl: 60s

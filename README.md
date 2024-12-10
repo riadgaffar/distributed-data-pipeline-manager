@@ -96,9 +96,15 @@ distributed-data-pipeline-manager/
 │   │   │   └── test-app-config.yaml # Config file specific to integration testing
 │   │   ├── pipelines/
 │   │   │   └── test-pipeline.yaml   # Integration test dynamic pipeline generator template
+│   │   ├── plugins/
+│   │   │   └── json/                # JSON format tests
+│   │   │       └── json_parser_test.go
+│   │   │   └── avro/                # Avro format tests
+│   │   │   └── parquet/             # Parquet format tests
+│   │   │   └── custom/              # Custom format tests
 │   │   └── test_data/
 │   │       └── test-messages.json   # Example JSON files for test data
-│   │   ├── docker-compose.override.yml # Integration test-specific Docker Compose
+│   │   ├── docker-compose.test.yml  # Integration test-specific Docker Compose
 │   │   ├── Dockerfile               # Definition of the IT build image for the service
 │   │   ├── helpers.go               # Shared helper functions for integration tests
 │   │   └── integration_test.go      # Go test file for integration tests
@@ -132,22 +138,23 @@ The application is configured using an environment variable, CONFIG_PATH, which 
 
 **Example Configuration File (app-config.yaml)**
 ```yaml
-app:
-  profiling: false
-  pipeline_template: "pipelines/benthos/pipeline.yaml"
-  generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
-  source:
-    parser: "json"               # Supported parsers: json, avro, parquet
-  kafka:
-    brokers: ["localhost:9092"]
-    topics: ["pipeline-topic"]
-    consumer_group: "pipeline-group"
-  postgres:
-    url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
-    table: "processed_data"
-  logger:
-    level: "DEBUG"
-
+  app:
+    profiling: false                 # Enable for development if needed
+    pipeline_template: "pipelines/benthos/pipeline.yaml"
+    generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
+    source:
+      parser: "json"                 # Future Supported parsers: json, avro, parquet
+      plugin_path: "/app/bin/plugins/json.so"
+    kafka:
+      brokers: ["redpanda:9092"]     # Use the hostname of the Kafka broker
+      topics: ["pipeline-topic"]
+      consumer_group: "pipeline-group"
+      min_partitions: 3
+    postgres:
+      url: "postgresql://admin:password@postgres:5432/pipelines?sslmode=disable"
+      table: "processed_data"
+    logger:
+      level: "DEBUG"
 ```
 
 1.	Save this configuration as config/app-config.yaml.
@@ -191,7 +198,7 @@ make test
 # Integration Tests
 
 ```zsh
-make integration-build
+make test-integration-plugin format=json  # Or avro, parquet, not available yet
 ```
 
 ---

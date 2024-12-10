@@ -131,19 +131,14 @@ debug-info:
 	@echo "Binary path: $(BIN_PATH)"
 	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
 
-.PHONY: integration-test
-integration-test:
-	@echo "Running integration tests..."
-	# Build the Docker images for integration testing
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
-	
-	# Start the containers and run the tests, exiting with the code of test-pipeline-manager
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml up --exit-code-from test-pipeline-manager
-	
-	# Capture logs (optional)
-	docker compose -f tests/integration/docker-compose.override.yml logs
-	
-	@echo "Integration tests completed successfully."
+.PHONY: test-integration-plugin
+test-integration-plugin:
+	@echo "Running integration plugin tests..."
+	./tests/integration/run-tests.sh $(format) || { \
+		echo "Integration plugin tests failed!"; \
+		exit 1; \
+	}
+	@echo "Integration plugin tests completed successfully."
 
 # Run Go tests
 .PHONY: test
@@ -156,7 +151,7 @@ test:
 .PHONY: integration-clean
 integration-clean:
 	@echo "Stopping and cleaning up integration test containers and volumes..."
-	docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	docker compose --profile testing -f tests/integration/docker-compose.test.yml down -v --remove-orphans
 	@if [ -n "$$(docker ps -aq --filter 'status=exited')" ]; then \
 		docker rm $$(docker ps -aq --filter 'status=exited'); \
 	fi

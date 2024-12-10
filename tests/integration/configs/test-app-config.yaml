@@ -1,7 +1,7 @@
 app:
   profiling: false
-  pipeline_template: "../../tests/integration/pipelines/test-pipeline.yaml"
-  generated_pipeline_config: "../../tests/integration/pipelines/test-generated-pipeline.yaml"
+  pipeline_template: "/app/pipelines/test-pipeline.yaml"
+  generated_pipeline_config: "/app/pipelines/test-generated-pipeline.yaml"
   source:
     parser: json
   kafka:
