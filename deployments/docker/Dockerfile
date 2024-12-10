@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-bullseye AS builder
+FROM golang:1.23.4-bullseye AS builder
 
 WORKDIR /app
 
@@ -22,6 +22,11 @@ RUN curl -1sLf 'https://dl.redpanda.com/nzc4ZYQK3WRGd9sy/redpanda/cfg/setup/bash
 # Copy source code
 COPY . .
 
+RUN echo "=== Building plugin ===" && \
+    mkdir -p bin/plugins && \
+    CGO_ENABLED=1 go build -buildmode=plugin -o bin/plugins/json.so plugins/json/json_parser.go && \
+    ls -l bin/plugins/
+
 # Build the application
 RUN go mod download && \
     go mod tidy && \
@@ -43,6 +48,8 @@ RUN apt-get update && \
 
 # Copy binary and configuration files
 COPY --from=builder /app/bin/pipeline_manager .
+COPY --from=builder /app/bin/plugins /app/bin/plugins
+
 COPY pipelines ./pipelines
 COPY config/app-config.yaml /app/config/app-config.yaml
 

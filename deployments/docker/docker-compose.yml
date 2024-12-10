@@ -5,7 +5,7 @@ networks:
 
 services:
   redpanda:
-    image: docker.redpanda.com/vectorized/redpanda:latest
+    image: redpandadata/redpanda:latest
     container_name: redpanda
     ports:
       - "9092:9092"

@@ -2,8 +2,10 @@
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 APP_NAME := pipeline_manager
 SRC_DIR := src
+PLUGINS_SRC_DIR := $(PROJECT_ROOT)/plugins
 CMD_DIR := $(PROJECT_ROOT)/cmd/pipeline-manager
 BIN_DIR := $(PROJECT_ROOT)/bin
+PLUGINS_BIN_DIR := $(PROJECT_ROOT)/bin/plugins
 BIN_PATH := $(BIN_DIR)/$(APP_NAME)
 DOCKER_COMPOSE := $(PROJECT_ROOT)/deployments/docker/docker-compose.yml
 POSTGRES_DATA := $(PROJECT_ROOT)/deployments/docker/postgres-data
@@ -17,11 +19,20 @@ TEST_DIRS := $(shell go list ./... | grep -v 'tests/integration')
 .PHONY: all
 all: build
 
+# Build the Go plugins
+.PHONY: build-plugins
+build-plugins:
+	@echo "Building parser plugins..."
+	mkdir -p $(PLUGINS_BIN_DIR)
+	@echo "Building parser plugins..."
+	CGO_ENABLED=1 go build -buildmode=plugin -o $(PROJECT_ROOT)/bin/plugins/json.so $(PLUGINS_SRC_DIR)/json/json_parser.go
+	@echo "Build complete: $(PLUGINS_BIN_DIR)"
+
 # Build the Go binary
 .PHONY: build
 build:
 	@echo "Building the application..."
-	mkdir -p $(BIN_DIR)
+	mkdir -p $(BIN_DIR)	
 	cd $(CMD_DIR) && go build -o $(BIN_PATH) main.go
 	@echo "Build complete: $(BIN_PATH)"
 
@@ -35,7 +46,7 @@ build-debug:
 
 # Run the application
 .PHONY: run
-run: build docker-up
+run: docker-up
 	@if docker ps | grep $(APP_NAME); then \
 		echo "Application stack is running..."; \
 	else \
@@ -58,6 +69,7 @@ debug: build-debug
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker Compose services..."
+	docker compose -f $(DOCKER_COMPOSE) build --no-cache
 	docker compose -f $(DOCKER_COMPOSE) up --build --abort-on-container-exit || { \
 		status=$$?; \
 		if [ $$status -eq 2 ]; then \
@@ -84,7 +96,6 @@ docker-clean-networks:
 	@echo "Cleaning docker build networks..."
 	docker network prune -f 
 	@echo "Docker build networks clean complete."
-
 
 # Clean Docker Build Cache
 .PHONY: docker-clean-cache
@@ -120,19 +131,14 @@ debug-info:
 	@echo "Binary path: $(BIN_PATH)"
 	@echo "Docker Compose file: $(DOCKER_COMPOSE)"
 
-.PHONY: integration-test
-integration-test:
-	@echo "Running integration tests..."
-	# Build the Docker images for integration testing
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml build
-	
-	# Start the containers and run the tests, exiting with the code of test-pipeline-manager
-	docker compose --profile testing -f tests/integration/docker-compose.override.yml up --exit-code-from test-pipeline-manager
-	
-	# Capture logs (optional)
-	docker compose -f tests/integration/docker-compose.override.yml logs
-	
-	@echo "Integration tests completed successfully."
+.PHONY: test-integration-plugin
+test-integration-plugin:
+	@echo "Running integration plugin tests..."
+	./tests/integration/run-tests.sh $(format) || { \
+		echo "Integration plugin tests failed!"; \
+		exit 1; \
+	}
+	@echo "Integration plugin tests completed successfully."
 
 # Run Go tests
 .PHONY: test
@@ -145,7 +151,7 @@ test:
 .PHONY: integration-clean
 integration-clean:
 	@echo "Stopping and cleaning up integration test containers and volumes..."
-	docker compose -f tests/integration/docker-compose.override.yml down -v --remove-orphans
+	docker compose --profile testing -f tests/integration/docker-compose.test.yml down -v --remove-orphans
 	@if [ -n "$$(docker ps -aq --filter 'status=exited')" ]; then \
 		docker rm $$(docker ps -aq --filter 'status=exited'); \
 	fi

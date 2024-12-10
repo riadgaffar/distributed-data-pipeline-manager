@@ -8,11 +8,11 @@ services:
       POSTGRES_DB: test_db
     ports:
       - "5433:5432"
+    profiles:
+      - testing
     volumes:
       - ./postgres-data:/var/lib/postgresql/data
       - ../../deployments/docker/init-scripts:/docker-entrypoint-initdb.d/
-    profiles:
-      - testing
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
       interval: 10s
@@ -20,7 +20,7 @@ services:
       retries: 5
 
   test-redpanda:
-    image: docker.redpanda.com/vectorized/redpanda:latest
+    image: redpandadata/redpanda:latest
     container_name: test-redpanda
     command:
       - redpanda
@@ -28,41 +28,38 @@ services:
       - --overprovisioned
       - --smp 1
       - --memory 1G
-      - --reserve-memory 0M
       - --node-id 0
-      - --check=false
-      - --kafka-addr=PLAINTEXT://0.0.0.0:29092
-      - --advertise-kafka-addr=PLAINTEXT://test-redpanda:29092
-    volumes:
-      - ./redpanda-data:/var/lib/redpanda/data
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092
+      - --advertise-kafka-addr PLAINTEXT://test-redpanda:29092
     ports:
       - "29092:29092"
     profiles:
       - testing
+    volumes:
+      - ./redpanda-data:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health || exit 1"]
+      test: ["CMD-SHELL", "rpk cluster health"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 5
 
   test-pipeline-manager:
-    image: test-pipeline-manager:latest
     container_name: test-pipeline-manager
     build:
-      context: ../../  # Set to the project root
+      context: ../..
       dockerfile: tests/integration/Dockerfile
-    environment:
-      CONFIG_PATH: /app/config.yaml
-      INTEGRATION_TEST_MODE: true
-    volumes:
-      - ../../pipelines:/app/pipelines
-      - ../../tests/integration/configs:/app/configs
-      - ../../tests/integration/test_data:/app/data
     depends_on:
       test-postgres:
         condition: service_healthy
       test-redpanda:
         condition: service_healthy
+    volumes:
+      - ../../pipelines:/app/pipelines
+      - ../../tests/integration/configs:/app/configs
+      - ../../tests/integration/test_data:/app/data
     profiles:
       - testing
+
+networks:
+  default:
+    name: test-network

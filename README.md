@@ -1,16 +1,42 @@
 # **Distributed Data Pipeline Manager**
 
-The Distributed Data Pipeline Manager is a robust tool for managing, orchestrating, and monitoring data pipelines. It integrates with Redpanda (Kafka alternative), processes messages using Benthos, and outputs results to PostgreSQL. This tool includes dynamic configuration support, profiling, and integration testing capabilities.
+A robust tool for managing, orchestrating, and monitoring data pipelines. It integrates with Redpanda (Kafka alternative), processes messages using Benthos, and outputs results to PostgreSQL. Features include dynamic configuration, plugin support for multiple data formats, profiling, and comprehensive integration testing.
 
 ---
 
 ## **Features**
 
-- **Dynamic Pipeline Configuration**: Define pipelines with support for multiple input, processing, and output stages.
-- **Orchestration**: Use an orchestrator for seamless pipeline management with dynamic configuration and timeout support.
-- **Profiling**: Built-in CPU and memory profiling for performance analysis.
-- **Integration Testing**: Dedicated integration test framework with environment variable control.
-- **Monitoring and Logging**: Integrated health checks, Prometheus metrics, and configurable logging.
+- **Dynamic Pipeline Configuration**: Define pipelines with multiple input, processing, and output stages
+- **Plugin System**: Extensible parser plugins supporting JSON, Avro, and Parquet formats
+- **Orchestration**: Pipeline management with dynamic configuration and timeout support
+- **Profiling**: Built-in CPU and memory profiling
+- **Integration Testing**: Dedicated framework with format-specific plugin testing
+- **Monitoring**: Health checks, Prometheus metrics, and configurable logging
+
+---
+
+## Pipeline Workflow
+
+### Overview
+
+The data pipeline follows this data processing workflow:
+
+```plaintext
+IoT Sensors → JSON Messages → Redpanda → Pipeline Manager
+                                         ├─→ PostgreSQL (Valid Data)
+                                         ├─→ Error Topic (Invalid Data)
+                                         └─→ Audit Logs (Compliance)
+```
+
+This architecture supports:
+
+- High throughput with parallel processing
+- Plugin-based format handling
+- Real-time monitoring and alerting
+- Data quality enforcement
+- Audit trail maintenance
+
+![Workflow](docs/images/ddpm_wf.png)
 
 ---
 
@@ -18,12 +44,16 @@ The Distributed Data Pipeline Manager is a robust tool for managing, orchestrati
 
 ### Prerequisites
 
-- **Go** (version 1.22 or later)
-- **Docker** (with Docker Compose)
-- **Redpanda CLI (`rpk`)**
-  `brew install redpanda-data/tap/redpanda`
-- **YAML Validator**: Install `yamllint` for validating YAML files.
-  `brew install yamllint`
+```bash
+# Install Go
+brew install go@1.22
+
+# Install Redpanda CLI
+brew install redpanda-data/tap/redpanda
+
+# Install YAML validator
+brew install yamllint
+```
 
 ---
 
@@ -37,17 +67,11 @@ distributed-data-pipeline-manager/
 │   ├── app-config.yaml               # Primary dynamic configuration file
 ├── deployments/                      # Deployment configurations
 │   ├── docker/                       # Docker-related deployment files
+│   │   ├── grafana-data              # Grafana dasboard configuration snap shot
+│   │   ├── init-scripts              # Database sql seed scripts
+│   │   ├── prometheus-config         # Prometheus config yaml
 │   │   ├── Dockerfile                # Build instructions for the app
 │   │   ├── docker-compose.yml        # Docker Compose for local deployment
-│   └── k8s/                          # Kubernetes manifests and Helm charts
-│       ├── base/                     # Raw Kubernetes YAML files
-│       │   ├── deployment.yaml       # App deployment manifest
-│       │   ├── service.yaml          # App service manifest
-│       │   ├── configmap.yaml        # App configuration as a ConfigMap
-│       │   ├── secret.yaml           # Secrets for sensitive data
-│       ├── overlays/                 # Environment-specific customizations
-│           ├── dev/                  # Development environment configs
-│           ├── prod/                 # Production environment configs
 ├── docs/                            # Documentation for the project
 │   ├── images/                      # Images for README and docs
 ├── pipelines/                       # Pipeline templates and configs
@@ -96,9 +120,15 @@ distributed-data-pipeline-manager/
 │   │   │   └── test-app-config.yaml # Config file specific to integration testing
 │   │   ├── pipelines/
 │   │   │   └── test-pipeline.yaml   # Integration test dynamic pipeline generator template
+│   │   ├── plugins/
+│   │   │   └── json/                # JSON format tests
+│   │   │       └── json_parser_test.go
+│   │   │   └── avro/                # Avro format tests
+│   │   │   └── parquet/             # Parquet format tests
+│   │   │   └── custom/              # Custom format tests
 │   │   └── test_data/
 │   │       └── test-messages.json   # Example JSON files for test data
-│   │   ├── docker-compose.override.yml # Integration test-specific Docker Compose
+│   │   ├── docker-compose.test.yml  # Integration test-specific Docker Compose
 │   │   ├── Dockerfile               # Definition of the IT build image for the service
 │   │   ├── helpers.go               # Shared helper functions for integration tests
 │   │   └── integration_test.go      # Go test file for integration tests
@@ -130,127 +160,26 @@ go mod tidy
 
 The application is configured using an environment variable, CONFIG_PATH, which points to a dynamic configuration file (app-config.yaml). Example:
 
-**Example Configuration File (app-config.yaml)**
+**Example Application Configuration File (app-config.yaml)**
 ```yaml
-app:
-  profiling: false
-  pipeline_template: "pipelines/benthos/pipeline.yaml"
-  generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
-  source:
-    parser: "json"               # Supported parsers: json, avro, parquet
-    file: "data/input.json"      # Path to the input file or source
-  kafka:
-    brokers: ["localhost:9092"]
-    topics: ["pipeline-topic"]
-    consumer_group: "pipeline-group"
-  postgres:
-    url: "postgresql://admin:password@localhost:5432/pipelines?sslmode=disable"
-    table: "processed_data"
-  logger:
-    level: "DEBUG"
-
+  app:
+    profiling: false                 # Enable for development if needed
+    pipeline_template: "pipelines/benthos/pipeline.yaml"
+    generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
+    source:
+      parser: "json"                 # Future Supported parsers: json, avro, parquet
+      plugin_path: "/app/bin/plugins/json.so"
+    kafka:
+      brokers: ["redpanda:9092"]     # Use the hostname of the Kafka broker
+      topics: ["pipeline-topic"]
+      consumer_group: "pipeline-group"
+      min_partitions: 3
+    postgres:
+      url: "postgresql://admin:password@postgres:5432/pipelines?sslmode=disable"
+      table: "processed_data"
+    logger:
+      level: "DEBUG"
 ```
-
-1.	Save this configuration as config/app-config.yaml.
-2.	Set the CONFIG_PATH environment variable:
-
-```zsh
-export CONFIG_PATH=config/app-config.yaml
-```
-
-**Example JSON Source File (messages.json)**
-```json
-{
-  "messages": [
-    "Message from JSON 1",
-    "Message from JSON 2",
-    "Message from JSON 3",
-    "Message from JSON 4",
-    "Message from JSON 5",
-    "Message from JSON 6",
-    "Message from JSON 7"
-  ]
-}
-```
-
-### Orchestrator
-
-The orchestrator coordinates the pipeline execution. It dynamically adjusts based on the environment:
-
-	- Integration Test Mode: Controlled by the INTEGRATION_TEST_MODE environment variable.
-
-	- Timeout Support: Automatically stops the pipeline after a defined duration in test mode.
-
-Orchestrator Usage in Code
-
-```go
-isTesting := os.Getenv("INTEGRATION_TEST_MODE") == "true"
-timeout := 0 * time.Second
-if isTesting {
-    timeout = 30 * time.Second // Adjust for integration tests
-}
-orchestrator := orchestrator.NewOrchestrator(cfg, &execute_pipeline.RealCommandExecutor{}, isTesting, timeout)
-
-if err := orchestrator.Run(); err != nil {
-    log.Fatalf("ERROR: Orchestrator encountered an issue: %v\n", err)
-}
-```
-
----
-
-# Unit Tests
-
-```zsh
-make test
-```
-
-# Integration Tests
-
-```zsh
-make integration-build
-```
-
----
-
-# Running the Application
-
-## Steps to Run
-
-**1.	Build and Start Services:**
-Use the Makefile to build and run the application with Docker Compose:
-
-```zsh
-make run
-```
-
-**2.	Monitor Logs:**
-Verify the logs to confirm pipeline execution:
-
-```plaintext
-INFO: Distributed Data Pipeline Manager
-INFO: Loaded configuration: {...}
-```
-
-**3.	Shutdown:**
-Use CTRL+C to gracefully stop the application. Profiling data will be saved if enabled.
-
-**4.	Clean Up:**
-Use make reset to stop services and clean up containers:
-
-```zsh
-make reset
-```
-
-## Pipeline Workflow
-
-### Overview
-
-The data pipeline follows this data processing workflow:
-
-```plaintext
-Source (JSON) → Kafka → Processors → Outputs (Postgres, Kafka, Logs)
-```
-![Memory Graph](docs/images/ddpm_wf.png)
 
 **Example Pipeline Configuration (Generated at Runtime)**
 ```yaml
@@ -296,21 +225,204 @@ output:
           codec: lines
 ```
 
+
+## Environment Setup
+
+1.	Save this configuration as config/app-config.yaml.
+2.	Set the CONFIG_PATH environment variable:
+
+```zsh
+export CONFIG_PATH=config/app-config.yaml
+```
+
+## Orchestrator
+
+The orchestrator coordinates pipeline execution with the following features:
+
+### Core Features
+- Dynamic configuration loading
+- Pipeline lifecycle management
+- Graceful shutdown handling
+- Test mode support with timeouts
+- Plugin system integration
+
+### Configuration
+```go
+type Orchestrator struct {
+    configLoader ConfigLoader
+    config       *config.AppConfig
+    executor     execute_pipeline.CommandExecutor
+    producer     producer.Producer
+    stopChan     chan os.Signal
+    timeout      time.Duration
+    isTesting    bool
+}
+```
+
+### Usage Examples
+
+**1. Production/Development Mode:**
+```go
+orchestrator := orchestrator.NewOrchestrator(
+    configLoader,
+    cfg,
+    &execute_pipeline.RealCommandExecutor{},
+    producer,
+    false,  // not testing
+    0,      // no timeout
+)
+```
+
+**2. Test Mode:**
+```go
+orchestrator := orchestrator.NewOrchestrator(
+    configLoader,
+    cfg,
+    &execute_pipeline.RealCommandExecutor{},
+    producer,
+    true,               // testing mode
+    30 * time.Second,   // timeout
+)
+```
+
+### Environment Variables
+
+```zsh
+INTEGRATION_TEST_MODE: Enable test mode
+CONFIG_PATH: Path to test configuration file
+```
+
+---
+
+# Plugin System
+
+## Available Plugins
+
+- JSON Parser: Default parser for JSON data
+- Avro Parser: (Coming soon)
+- Parquet Parser: (Coming soon)
+
+## Creating Custom Plugins
+
+1. Create plugin implementation:
+
+```go
+// plugins/custom/custom_parser.go
+package main
+
+type CustomParser struct{}
+
+func (p *CustomParser) Parse(data []byte) (interface{}, error) {
+    // Implementation
+}
+```
+
+2. Build plugin:
+
+```zsh
+make build-plugins
+```
+
+---
+
+# Running the Application
+
+## LocalDevelopment
+
+```zsh
+# Start services
+make run
+
+# Monitor logs
+docker compose logs -f
+
+# Graceful shutdown
+make reset
+```
+
+## Debug Mode
+
+```zsh
+# Build with debug flags
+make build-debug
+
+# Run with debugger
+make debug
+```
+
+---
+
+# Unit Tests
+
+```zsh
+make test
+```
+
+# Integration Tests
+
+```zsh
+# Test specific format
+make test-integration-plugin format=json # Or avro, parquet, not available yet
+
+# Clean test environment
+make integration-clean
+```
+
+## Common Test Issues & Solutions
+
+1. **Pipeline Not Starting**
+
+```zsh
+# Check service health
+docker ps
+docker logs test-pipeline-manager
+
+# Verify network connectivity
+docker network inspect test-network
+```
+
+2. **Message Processing Issues**
+
+```zsh
+# Check Kafka topics
+docker exec test-redpanda rpk topic list
+docker exec test-redpanda rpk topic consume test-topic
+
+# Verify PostgreSQL data
+docker exec test-postgres psql -U test_user -d test_db -c "SELECT COUNT(*) FROM processed_data;"
+```
+
+3. **Plugin Loading Errors**
+
+```zsh
+# Verify plugin build
+ls -l bin/plugins/
+
+# Check plugin permissions
+chmod 755 bin/plugins/*.so
+```
+
 ---
 
 # Profiling
 
 Profiling helps monitor performance by generating CPU and memory usage data.
 
-## Enabling Profiling
+1. Enable profiling in config:
 
-	•	Enable Profiling: Set profiling: true in app-config.yaml.
-	•	Run the Application: Profiling data is generated when the app exits (cpu.pprof, mem.pprof).
+```yaml
+app:
+  profiling: true
+```
 
-## Analyzing Profiling Data
+2. Generate profiles:
 
 ```zsh
+# CPU profile
 go tool pprof -http=:8080 cpu.pprof
+
+# Memory profile
+go tool pprof -http=:8080 mem.pprof
 ```
 
 ## Monitoring
@@ -347,26 +459,46 @@ go tool pprof -png ./bin/pipeline_manager mem.pprof > ./docs/images/mem.png
 
 ## Common Issues
 
-1.	**Configuration Errors:**
-    - Ensure CONFIG_PATH is set correctly.
-    - Validate YAML syntax using yamllint.
+**1. Configuration Errors**
 
-2.	**Kafka or Postgres Connection Issues:**
-    - Confirm services are running and accessible.
-    - Verify the kafka.brokers and postgres.url settings.
+```zsh
+# Validate YAML syntax
+yamllint config/app-config.yaml
 
-3.	**No Messages Processed:**
-    - Ensure the JSON file path in the configuration is correct.
-    - Check Kafka logs for errors.
+# Check environment variables
+echo $CONFIG_PATH
+```
 
-4.	**Metrics Not Visible:**
-    - Ensure Prometheus PushGateway is running on port 9091.
+**2. Connection Issues**
 
+```zsh
+# Verify services
+docker compose ps
+
+# Check network
+docker network ls
+docker network inspect test-network
+```
+
+**3. Plugin Issues**
+
+```zsh
+# Rebuild plugins
+make build-plugins
+
+# Check plugin logs
+docker logs test-pipeline-manager | grep "plugin"
+```
 ---
 
 # Contributing
 
-Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request for review.
+Contributions are welcome!
+
+  1. Fork repository
+  2. Create feature branch
+  3. Add tests
+  4. Submit pull request
 
 ---
 

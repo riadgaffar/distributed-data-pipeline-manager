@@ -65,7 +65,8 @@ func createTestConfig() *config.AppConfig {
 			PipelineTemplate       string `yaml:"pipeline_template"`
 			GeneratePipelineConfig string `yaml:"generated_pipeline_config"`
 			Source                 struct {
-				Parser string `yaml:"parser"`
+				Parser     string `yaml:"parser"`
+				PluginPath string `yaml:"plugin_path"`
 			} `yaml:"source"`
 			Kafka struct {
 				Brokers       []string `yaml:"brokers"`
@@ -84,9 +85,11 @@ func createTestConfig() *config.AppConfig {
 			PipelineTemplate:       "template",
 			GeneratePipelineConfig: "config",
 			Source: struct {
-				Parser string `yaml:"parser"`
+				Parser     string `yaml:"parser"`
+				PluginPath string `yaml:"plugin_path"`
 			}{
-				Parser: "json",
+				Parser:     "json",
+				PluginPath: "bin/plugins/json.so",
 			},
 			Kafka: struct {
 				Brokers       []string `yaml:"brokers"`

@@ -20,6 +20,14 @@ func (m *MockParser) Parse(data []byte) (interface{}, error) {
 	return args.Get(0), args.Error(1)
 }
 
+func (m *MockParser) Name() string {
+	return "mock"
+}
+
+func (m *MockParser) Version() string {
+	return "1.0.0"
+}
+
 // Rest of the mock implementations remain the same
 type MockProducer struct {
 	ProducedMessages []*kafka.Message

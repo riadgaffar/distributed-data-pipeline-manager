@@ -78,7 +78,7 @@ func enableProfiling(cfg *config.AppConfig) {
 func startMessageProduction(cfg *config.AppConfig, kafkaProducer *producer.KafkaProducer) {
 	defer kafkaProducer.Close()
 
-	parser, err := bootstrap.InitializeParser(cfg.App.Source.Parser)
+	parser, err := bootstrap.InitializeParser(cfg.App.Source.Parser, cfg.App.Source.PluginPath)
 	if err != nil {
 		log.Fatalf("ERROR: Failed to initialize parser: %v", err)
 	}
