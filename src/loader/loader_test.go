@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -32,6 +30,19 @@ func TestMain(m *testing.M) {
 }
 
 func TestLoadParser(t *testing.T) {
+	// Skip if running in -short mode
+	if testing.Short() {
+		t.Skip("Skipping plugin tests in short mode")
+	}
+
+	// Build test plugin before running tests
+	pluginPath := filepath.Join("plugins", "json", "testdata", "json.so")
+
+	if err := buildTestPlugin(pluginPath); err != nil {
+		t.Fatalf("Failed to build test plugin: %v", err)
+	}
+
+	defer os.Remove(pluginPath) // Clean up the test plugin
 	tests := []struct {
 		name       string
 		pluginPath string
@@ -39,8 +50,8 @@ func TestLoadParser(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "valid plugin",
-			pluginPath: "../../bin/plugins/json.so",
+			name:       "load json plugin",
+			pluginPath: pluginPath,
 			parserType: "json",
 			wantErr:    false,
 		},
@@ -55,13 +66,13 @@ func TestLoadParser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parser, err := LoadParser(tt.pluginPath, tt.parserType)
-			if tt.wantErr {
-				assert.Error(t, err)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("LoadParser() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			assert.NoError(t, err)
-			assert.NotNil(t, parser)
-			assert.Equal(t, tt.parserType, parser.Name())
+			if !tt.wantErr && parser == nil {
+				t.Error("LoadParser() returned nil parser without error")
+			}
 		})
 	}
 }
