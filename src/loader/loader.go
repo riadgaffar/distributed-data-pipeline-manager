@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"plugin"
 )
 
@@ -16,12 +15,6 @@ func LoadParser(pluginPath string, parserType string) (parsers.Parser, error) {
 	// Check if file exists
 	if _, err := os.Stat(pluginPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("plugin file does not exist at %s", pluginPath)
-	}
-
-	// If no plugin path provided, use default plugin path
-	if pluginPath == "" {
-		defaultPath := filepath.Join("bin", "plugins", parserType+".so")
-		pluginPath = defaultPath
 	}
 
 	p, err := plugin.Open(pluginPath)
@@ -40,15 +33,4 @@ func LoadParser(pluginPath string, parserType string) (parsers.Parser, error) {
 	}
 
 	return parser, nil
-}
-
-func getDefaultParser(parserType string) (parsers.Parser, error) {
-	switch parserType {
-	case "json":
-		return &parsers.JSONParser{}, nil
-	case "avro", "parquet":
-		return nil, fmt.Errorf("parser type '%s' requires plugin implementation", parserType)
-	default:
-		return nil, fmt.Errorf("unsupported parser type: %s", parserType)
-	}
 }

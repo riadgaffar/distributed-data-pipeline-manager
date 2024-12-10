@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -30,20 +32,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestLoadParser(t *testing.T) {
-	// Skip if running in -short mode
-	if testing.Short() {
-		t.Skip("Skipping plugin tests in short mode")
-	}
-
-	// Build test plugin before running tests
-	pluginPath := filepath.Join("plugins", "json", "testdata", "json.so")
-
-	if err := buildTestPlugin(pluginPath); err != nil {
-		t.Fatalf("Failed to build test plugin: %v", err)
-	}
-
-	defer os.Remove(pluginPath) // Clean up the test plugin
-
 	tests := []struct {
 		name       string
 		pluginPath string
@@ -51,15 +39,15 @@ func TestLoadParser(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "load json plugin",
-			pluginPath: pluginPath,
+			name:       "valid plugin",
+			pluginPath: "../../bin/plugins/json.so",
 			parserType: "json",
 			wantErr:    false,
 		},
 		{
 			name:       "non-existent plugin",
 			pluginPath: "non-existent.so",
-			parserType: "avro",
+			parserType: "json",
 			wantErr:    true,
 		},
 	}
@@ -67,55 +55,13 @@ func TestLoadParser(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parser, err := LoadParser(tt.pluginPath, tt.parserType)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("LoadParser() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
 				return
 			}
-			if !tt.wantErr && parser == nil {
-				t.Error("LoadParser() returned nil parser without error")
-			}
-		})
-	}
-}
-
-func TestGetDefaultParser(t *testing.T) {
-	tests := []struct {
-		name       string
-		parserType string
-		wantErr    bool
-	}{
-		{
-			name:       "json parser",
-			parserType: "json",
-			wantErr:    false,
-		},
-		{
-			name:       "avro parser",
-			parserType: "avro",
-			wantErr:    true,
-		},
-		{
-			name:       "parquet parser",
-			parserType: "parquet",
-			wantErr:    true,
-		},
-		{
-			name:       "unknown parser",
-			parserType: "unknown",
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			parser, err := getDefaultParser(tt.parserType)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getDefaultParser() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && parser == nil {
-				t.Error("getDefaultParser() returned nil parser without error")
-			}
+			assert.NoError(t, err)
+			assert.NotNil(t, parser)
+			assert.Equal(t, tt.parserType, parser.Name())
 		})
 	}
 }
