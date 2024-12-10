@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"distributed-data-pipeline-manager/src/config"
+	"distributed-data-pipeline-manager/src/loader"
 	"distributed-data-pipeline-manager/src/parsers"
 	"distributed-data-pipeline-manager/src/producer"
 	"fmt"
@@ -59,17 +60,8 @@ func InitializeApp(configPath string, port int) (*config.AppConfig, error) {
 }
 
 // InitializeParser creates a parser based on the configuration.
-func InitializeParser(parserType string) (parsers.Parser, error) {
-	switch parserType {
-	case "json":
-		return &parsers.JSONParser{}, nil
-	case "avro":
-		return nil, fmt.Errorf("parser type '%s' is not yet implemented", parserType)
-	case "parquet":
-		return nil, fmt.Errorf("parser type '%s' is not yet implemented", parserType)
-	default:
-		return nil, fmt.Errorf("unsupported parser type: '%s'", parserType)
-	}
+func InitializeParser(parserType string, pluginPath string) (parsers.Parser, error) {
+	return loader.LoadParser(pluginPath, parserType)
 }
 
 // InitializeKafka ensures Kafka topics are properly configured and starts monitoring.

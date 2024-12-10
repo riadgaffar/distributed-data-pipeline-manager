@@ -1,4 +1,4 @@
-FROM golang:1.22-bullseye AS builder
+FROM golang:1.23.4-bullseye AS builder
 
 # Install dependencies
 RUN apt-get update && apt-get install -y \
@@ -19,7 +19,6 @@ RUN curl -1sLf \
     apt-get install -y redpanda
     
 RUN rpk --version
-
 
 # Set up the Go application
 WORKDIR /app

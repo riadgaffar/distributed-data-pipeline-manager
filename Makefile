@@ -2,8 +2,10 @@
 PROJECT_ROOT := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 APP_NAME := pipeline_manager
 SRC_DIR := src
+PLUGINS_SRC_DIR := $(PROJECT_ROOT)/plugins
 CMD_DIR := $(PROJECT_ROOT)/cmd/pipeline-manager
 BIN_DIR := $(PROJECT_ROOT)/bin
+PLUGINS_BIN_DIR := $(PROJECT_ROOT)/bin/plugins
 BIN_PATH := $(BIN_DIR)/$(APP_NAME)
 DOCKER_COMPOSE := $(PROJECT_ROOT)/deployments/docker/docker-compose.yml
 POSTGRES_DATA := $(PROJECT_ROOT)/deployments/docker/postgres-data
@@ -17,11 +19,20 @@ TEST_DIRS := $(shell go list ./... | grep -v 'tests/integration')
 .PHONY: all
 all: build
 
+# Build the Go plugins
+.PHONY: build-plugins
+build-plugins:
+	@echo "Building parser plugins..."
+	mkdir -p $(PLUGINS_BIN_DIR)
+	@echo "Building parser plugins..."
+	CGO_ENABLED=1 go build -buildmode=plugin -o $(PROJECT_ROOT)/bin/plugins/json.so $(PLUGINS_SRC_DIR)/json/json_parser.go
+	@echo "Build complete: $(PLUGINS_BIN_DIR)"
+
 # Build the Go binary
 .PHONY: build
 build:
 	@echo "Building the application..."
-	mkdir -p $(BIN_DIR)
+	mkdir -p $(BIN_DIR)	
 	cd $(CMD_DIR) && go build -o $(BIN_PATH) main.go
 	@echo "Build complete: $(BIN_PATH)"
 
@@ -35,7 +46,7 @@ build-debug:
 
 # Run the application
 .PHONY: run
-run: build docker-up
+run: docker-up
 	@if docker ps | grep $(APP_NAME); then \
 		echo "Application stack is running..."; \
 	else \
@@ -58,6 +69,7 @@ debug: build-debug
 .PHONY: docker-up
 docker-up:
 	@echo "Starting Docker Compose services..."
+	docker compose -f $(DOCKER_COMPOSE) build --no-cache
 	docker compose -f $(DOCKER_COMPOSE) up --build --abort-on-container-exit || { \
 		status=$$?; \
 		if [ $$status -eq 2 ]; then \
@@ -84,7 +96,6 @@ docker-clean-networks:
 	@echo "Cleaning docker build networks..."
 	docker network prune -f 
 	@echo "Docker build networks clean complete."
-
 
 # Clean Docker Build Cache
 .PHONY: docker-clean-cache

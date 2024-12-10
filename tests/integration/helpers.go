@@ -47,7 +47,6 @@ func loadTestConfig(t *testing.T, configPath string) *config.AppConfig {
 }
 
 // parseTestMessages parses the test messages from the specified file.
-// parseTestMessages parses the test messages from the specified file.
 func parseJSONTestMessages(t *testing.T, testDataPath string) []interface{} {
 	parser := &parsers.JSONParser{}
 	data, err := os.ReadFile(testDataPath)

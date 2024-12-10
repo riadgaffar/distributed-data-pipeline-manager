@@ -1,14 +1,12 @@
-package parsers
+package main
 
 import (
 	"encoding/json"
 	"fmt"
 )
 
-// JSONParser implements the Parser interface for JSON data.
 type JSONParser struct{}
 
-// Parse parses the JSON data and returns a list of messages.
 func (p *JSONParser) Parse(data []byte) (interface{}, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("failed to parse JSON: unexpected end of JSON input")
@@ -30,3 +28,6 @@ func (p *JSONParser) Name() string {
 func (p *JSONParser) Version() string {
 	return "1.0.0"
 }
+
+// Export the parser
+var Parser JSONParser

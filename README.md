@@ -138,7 +138,6 @@ app:
   generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
   source:
     parser: "json"               # Supported parsers: json, avro, parquet
-    file: "data/input.json"      # Path to the input file or source
   kafka:
     brokers: ["localhost:9092"]
     topics: ["pipeline-topic"]
@@ -156,21 +155,6 @@ app:
 
 ```zsh
 export CONFIG_PATH=config/app-config.yaml
-```
-
-**Example JSON Source File (messages.json)**
-```json
-{
-  "messages": [
-    "Message from JSON 1",
-    "Message from JSON 2",
-    "Message from JSON 3",
-    "Message from JSON 4",
-    "Message from JSON 5",
-    "Message from JSON 6",
-    "Message from JSON 7"
-  ]
-}
 ```
 
 ### Orchestrator
@@ -248,7 +232,7 @@ make reset
 The data pipeline follows this data processing workflow:
 
 ```plaintext
-Source (JSON) → Kafka → Processors → Outputs (Postgres, Kafka, Logs)
+Source (JSON | AVRO | PARQUET) → Kafka → Processors → Outputs (Postgres, Kafka, Logs)
 ```
 ![Memory Graph](docs/images/ddpm_wf.png)
 
@@ -356,7 +340,6 @@ go tool pprof -png ./bin/pipeline_manager mem.pprof > ./docs/images/mem.png
     - Verify the kafka.brokers and postgres.url settings.
 
 3.	**No Messages Processed:**
-    - Ensure the JSON file path in the configuration is correct.
     - Check Kafka logs for errors.
 
 4.	**Metrics Not Visible:**

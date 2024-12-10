@@ -4,6 +4,7 @@ app:
   generated_pipeline_config: "pipelines/benthos/generated-pipeline.yaml"
   source:
     parser: "json"                 # Supported parsers: json, avro, parquet
+    plugin_path: "/app/bin/plugins/json.so"
   kafka:
     brokers: ["redpanda:9092"]     # Use the hostname of the Kafka broker
     topics: ["pipeline-topic"]
