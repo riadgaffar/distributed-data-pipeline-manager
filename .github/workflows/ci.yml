@@ -24,6 +24,11 @@ jobs:
       - name: Run Unit Tests
         run: make test
         shell: bash
+      
+      # Step 4: Run Integration Plugin Tests
+      - name: Run Integration Plugin Tests
+        run: make test-integration-plugin
+        shell: bash
 
       # Step 5: Log in to Docker Hub
       - name: Log in to Docker Hub

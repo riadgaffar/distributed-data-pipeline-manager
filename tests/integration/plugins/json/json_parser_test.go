@@ -2,6 +2,7 @@ package json_test
 
 import (
 	"distributed-data-pipeline-manager/tests/integration/framework"
+	"log"
 	"testing"
 )
 
@@ -46,6 +47,7 @@ func TestJSONParser(t *testing.T) {
 func (t *JSONParserTest) Setup() error {
 	// Load test messages
 	messages := t.Framework.Helper.ParseJSONTestMessages("../../test_data/test-messages.json")
+	log.Printf("Parsed messages: %+v", messages)
 	t.messages = messages
 	t.Framework.Helper.Setup()
 	return nil
