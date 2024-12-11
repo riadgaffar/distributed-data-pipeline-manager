@@ -21,8 +21,10 @@ RUN rpk --version
 
 WORKDIR /app
 COPY . .
-COPY pipelines /app/pipelines
-COPY tests/integration/pipelines/test-pipeline.yaml /app/pipelines/
+
+# Ensure pipeline config exists
+RUN mkdir -p /app/pipelines && \
+    cp tests/integration/pipelines/test-pipeline.yaml /app/pipelines/
 RUN go get -tags dynamic github.com/confluentinc/confluent-kafka-go/v2@v2.6.1
 RUN go mod tidy
 

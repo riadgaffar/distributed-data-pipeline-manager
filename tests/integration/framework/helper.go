@@ -9,6 +9,9 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/avast/retry-go/v4"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -33,6 +36,7 @@ func (h *PipelineTestHelper) ParseJSONTestMessages(path string) []interface{} {
 		var err error
 		h.config, err = config.LoadConfig(h.configPath)
 		if err != nil {
+			log.Printf("Config load failed: %v", err)
 			return nil
 		}
 	}
@@ -40,23 +44,25 @@ func (h *PipelineTestHelper) ParseJSONTestMessages(path string) []interface{} {
 	// Read and parse test data file
 	data, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("File read failed: %v", err)
 		return nil
 	}
 
-	var messages []interface{}
-	if err := json.Unmarshal(data, &messages); err != nil {
-		// Try single message if array unmarshal fails
-		var singleMessage interface{}
-		if err := json.Unmarshal(data, &singleMessage); err != nil {
-			return nil
-		}
-		messages = []interface{}{singleMessage}
+	var wrapper struct {
+		Messages []interface{} `json:"messages"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err != nil {
+		log.Printf("JSON unmarshal failed: %v", err)
+		return nil
 	}
 
-	return messages
+	log.Printf("Parsed messages: %+v", wrapper.Messages)
+	return wrapper.Messages
 }
 
 func (h *PipelineTestHelper) ProduceMessagesToKafka(messages []interface{}) error {
+	log.Printf("Attempting to produce %d messages to topic %s", len(messages), h.config.App.Kafka.Topics[0])
+
 	if h.config == nil {
 		var err error
 		h.config, err = config.LoadConfig(h.configPath)
@@ -78,6 +84,7 @@ func (h *PipelineTestHelper) ProduceMessagesToKafka(messages []interface{}) erro
 	topic := h.config.App.Kafka.Topics[0]
 
 	// Produce messages
+	deliveryChan := make(chan kafka.Event)
 	for i, msg := range messages {
 		msgBytes, err := json.Marshal(msg)
 		if err != nil {
@@ -85,23 +92,101 @@ func (h *PipelineTestHelper) ProduceMessagesToKafka(messages []interface{}) erro
 		}
 
 		err = producer.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{
-				Topic:     &topic,
-				Partition: kafka.PartitionAny,
-			},
-			Value: msgBytes,
-		}, nil)
-		if err != nil {
-			return fmt.Errorf("failed to produce message %d: %w", i, err)
+			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+			Value:          msgBytes,
+		}, deliveryChan)
+
+		e := <-deliveryChan
+		m := e.(*kafka.Message)
+		if m.TopicPartition.Error != nil {
+			log.Printf("Delivery failed: %v", m.TopicPartition.Error)
+		} else {
+			log.Printf("Delivered message to topic %s [%d] at offset %v",
+				*m.TopicPartition.Topic, m.TopicPartition.Partition, m.TopicPartition.Offset)
 		}
 	}
 
-	// Wait for messages to be delivered
-	producer.Flush(15 * 1000)
+	// Add delay after producing messages
+	log.Printf("Waiting for messages to be processed...")
+	time.Sleep(2 * time.Second)
+
+	return nil
+}
+
+func (h *PipelineTestHelper) Setup() error {
+	log.Printf("Starting pipeline setup...")
+
+	if err := execute_pipeline.ExecutePipeline(h.configPath, h.executor); err != nil {
+		return fmt.Errorf("failed to start pipeline: %w", err)
+	}
+
+	// Verify pipeline is running
+	if err := h.waitForPipeline(); err != nil {
+		return fmt.Errorf("pipeline failed to start: %w", err)
+	}
+
+	return nil
+}
+
+func (h *PipelineTestHelper) waitForPipeline() error {
+	timeout := time.After(30 * time.Second)
+	tick := time.Tick(1 * time.Second)
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for pipeline")
+		case <-tick:
+			// Check if pipeline is processing by attempting to validate
+			if err := h.checkRecordCount(0); err == nil {
+				log.Printf("Pipeline is ready - database connection verified")
+				return nil
+			}
+		}
+	}
+}
+
+func (h *PipelineTestHelper) waitForKafka() error {
+	timeout := time.After(30 * time.Second)
+	tick := time.Tick(1 * time.Second)
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for Kafka")
+		case <-tick:
+			// Try to connect to Kafka
+			if err := h.checkKafkaConnection(); err == nil {
+				return nil
+			}
+		}
+	}
+}
+
+func (h *PipelineTestHelper) checkKafkaConnection() error {
+	// Implement Kafka connection check here
+	// For example:
+	config := &kafka.ConfigMap{"bootstrap.servers": h.config.App.Kafka.Brokers}
+	producer, err := kafka.NewProducer(config)
+	if err != nil {
+		return err
+	}
+	defer producer.Close()
 	return nil
 }
 
 func (h *PipelineTestHelper) ValidateProcessedData(expectedCount int) error {
+	// Retry with backoff until records appear or timeout
+	return retry.Do(
+		func() error {
+			return h.checkRecordCount(expectedCount)
+		},
+		retry.Attempts(5),
+		retry.Delay(1*time.Second),
+	)
+}
+
+func (h *PipelineTestHelper) checkRecordCount(expectedCount int) error {
 	if h.config == nil {
 		var err error
 		h.config, err = config.LoadConfig(h.configPath)
@@ -144,7 +229,6 @@ func (h *PipelineTestHelper) ValidateProcessedData(expectedCount int) error {
 
 	return nil
 }
-
 func (h *PipelineTestHelper) StopPipeline() error {
 	if h.executor == nil {
 		return fmt.Errorf("no pipeline process to stop")
@@ -152,14 +236,6 @@ func (h *PipelineTestHelper) StopPipeline() error {
 
 	if err := h.executor.StopPipeline(); err != nil {
 		return fmt.Errorf("failed to stop pipeline: %w", err)
-	}
-	return nil
-}
-
-func (h *PipelineTestHelper) Setup() error {
-	// Start pipeline before running tests
-	if err := execute_pipeline.ExecutePipeline(h.configPath, h.executor); err != nil {
-		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
 	return nil
 }

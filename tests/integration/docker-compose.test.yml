@@ -54,7 +54,7 @@ services:
       test-redpanda:
         condition: service_healthy
     volumes:
-      - ../../pipelines:/app/pipelines
+      - ../../tests/integration/pipelines:/app/pipelines
       - ../../tests/integration/configs:/app/configs
       - ../../tests/integration/test_data:/app/data
     profiles:
