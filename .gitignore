@@ -3,4 +3,5 @@ bin
 postgres-data
 redpanda-data
 pipelines/benthos/generated-pipeline.yaml
+tests/integration/pipelines/test-generated-pipeline.yaml
 **/.DS_Store
