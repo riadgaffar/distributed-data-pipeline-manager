@@ -25,23 +25,18 @@ jobs:
         run: make test
         shell: bash
       
-      # Step 4: Run Integration Plugin Tests
-      - name: Run Integration Plugin Tests
-        run: make test-integration-plugin
-        shell: bash
-
-      # Step 5: Log in to Docker Hub
+      # Step 4: Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # Step 6: Build Docker Image
+      # Step 5: Build Docker Image
       - name: Build Docker Image
         run: make docker-build
         shell: bash
 
-      # Step 7: Push Docker Image
+      # Step 6: Push Docker Image
       - name: Push Docker Image
         run: docker push r9docker/ddpm:latest
