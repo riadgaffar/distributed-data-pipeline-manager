@@ -44,6 +44,13 @@ build-debug:
 	cd $(CMD_DIR) && go build -gcflags="all=-N -l" -o $(BIN_PATH) main.go
 	@echo "Build complete: $(BIN_PATH)"
 
+# Build the Docker image
+.PHONY: docker-build
+docker-build:
+	@echo "Building Docker image..."
+	docker build -f deployments/docker/Dockerfile -t r9docker/ddpm:latest .
+	@echo "Docker image build complete: r9docker/ddpm:latest"
+
 # Run the application
 .PHONY: run
 run: docker-up
