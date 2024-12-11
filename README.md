@@ -40,7 +40,6 @@ This architecture supports:
 
 ---
 
----
 ### Basic Metrics Overview
 
 <img src="docs/images/ddpm_basic_metrics.png" width="800" height="400" alt="CPU Graph">
