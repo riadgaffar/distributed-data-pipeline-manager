@@ -66,23 +66,28 @@ brew install yamllint
 # Project structure
 ```plaintext
 distributed-data-pipeline-manager/
-├── cmd/                              # Main application entry points
-│   ├── pipeline-manager/             # Entry point for the pipeline manager
-│   │   └── main.go                   # Main application logic
+├── cmd/                             # Main application entry points
+│   ├── pipeline-manager/            # Entry point for the pipeline manager
+│   │   └── main.go                  # Main application logic
 ├── config/
-│   ├── app-config.yaml               # Primary dynamic configuration file
-├── deployments/                      # Deployment configurations
-│   ├── docker/                       # Docker-related deployment files
-│   │   ├── grafana-data              # Grafana dasboard configuration snap shot
-│   │   ├── init-scripts              # Database sql seed scripts
-│   │   ├── prometheus-config         # Prometheus config yaml
-│   │   ├── Dockerfile                # Build instructions for the app
-│   │   ├── docker-compose.yml        # Docker Compose for local deployment
+│   ├── app-config.yaml              # Primary dynamic configuration file
+├── deployments/                     # Deployment configurations
+│   ├── docker/                      # Docker-related deployment files
+│   │   ├── grafana-data             # Grafana dasboard configuration snap shot
+│   │   ├── init-scripts             # Database sql seed scripts
+│   │   ├── prometheus-config        # Prometheus config yaml
+│   │   ├── Dockerfile               # Build instructions for the app
+│   │   ├── docker-compose.yml       # Docker Compose for local deployment
 ├── docs/                            # Documentation for the project
 │   ├── images/                      # Images for README and docs
 ├── pipelines/                       # Pipeline templates and configs
 │   └── benthos/
 │       └── pipeline.yaml
+│   ├── plugins/
+│   │   └── json/                    # JSON format plugin
+│   │   └── avro/                    # Avro format plugin
+│   │   └── parquet/                 # Parquet format plugin
+│   │   └── custom/                  # Custom format plugin
 ├── src/
 │   ├── bootstrap/                   # Application initialization and setup logic
 │   │   ├── bootstrap.go             # Initialization logic for app, Kafka, and parser
