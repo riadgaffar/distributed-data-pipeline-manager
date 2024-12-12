@@ -433,9 +433,25 @@ go tool pprof -http=:8080 mem.pprof
 
 ## Monitoring
 
+You can access containers' hostnames by adding them to your local /etc/hosts file, mapping them to 127.0.0.1.
+
+```zsh
+sudo echo "127.0.0.1 grafana ddpm node-exporter prometheus pipeline-manager redpanda" >> /etc/hosts
+```
+
 The application provides the following endpoints:
-	•	**Health Check:** http://localhost:4195/health
-	•	**Metrics:** http://localhost:4195/metrics
+
+  - DDPM Health Check: http://ddpm:8080/health
+  - Grafana Dashboards: http://grafana:3000/dashboards
+  - Prometheus Targets health: http://prometheus:9090/targets
+
+Additional details on containers and ports:
+
+  - Benthos metrics: 4195
+  - Redpanda metrics: 9644
+  - Node Exporter: 9100
+  - Grafana: 3000
+  - Prometheus: 9090
 
 For metrics aggregation, set up Prometheus PushGateway.
 

@@ -10,7 +10,6 @@ services:
     ports:
       - "9092:9092"
       - "9644:9644"
-      - "4195:4195"
     command:
       - redpanda
       - start
@@ -97,6 +96,7 @@ services:
       dockerfile: deployments/docker/Dockerfile
     ports:
       - "8080:8080"
+      - "4195:4195"
     environment:
       CONFIG_PATH: /app/config/app-config.yaml
     volumes:
