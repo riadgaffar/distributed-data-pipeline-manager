@@ -124,6 +124,11 @@ distributed-data-pipeline-manager/
 │   ├── integration/                 # Integration test utilities and examples
 │   │   ├── configs/                 # Integration test pipeline config
 │   │   │   └── test-app-config.yaml # Config file specific to integration testing
+│   │   ├── framework/               # Integration testing infrastructure for integration tests
+│   │   │   └── assertion.go         # TestAssertions struct with methods for test validations and comparisons
+│   │   │   └── base.go              # TestFramework struct that coordinates the testing components
+│   │   │   └── helper.go            # PipelineTestHelper with core functionality
+│   │   │   └── plugin.go            # PluginTest interface and BasePluginTest struct that plugin-specific tests implement
 │   │   ├── pipelines/
 │   │   │   └── test-pipeline.yaml   # Integration test dynamic pipeline generator template
 │   │   ├── plugins/
@@ -136,8 +141,7 @@ distributed-data-pipeline-manager/
 │   │       └── test-messages.json   # Example JSON files for test data
 │   │   ├── docker-compose.test.yml  # Integration test-specific Docker Compose
 │   │   ├── Dockerfile               # Definition of the IT build image for the service
-│   │   ├── helpers.go               # Shared helper functions for integration tests
-│   │   └── integration_test.go      # Go test file for integration tests
+│   │   ├── run-tests.sh             # Script to run integration test
 ├── go.mod                           # Go module definition
 ├── go.sum                           # Go dependencies checksum
 ├── Makefile                         # Common commands for building, testing, running
