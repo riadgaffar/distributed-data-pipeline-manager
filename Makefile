@@ -26,6 +26,7 @@ build-plugins:
 	mkdir -p $(PLUGINS_BIN_DIR)
 	@echo "Building parser plugins..."
 	CGO_ENABLED=1 go build -buildmode=plugin -o $(PROJECT_ROOT)/bin/plugins/json.so $(PLUGINS_SRC_DIR)/json/json_parser.go
+	CGO_ENABLED=1 go build -buildmode=plugin -o $(PROJECT_ROOT)/bin/plugins/avro.so $(PLUGINS_SRC_DIR)/avro/avro_parser.go
 	@echo "Build complete: $(PLUGINS_BIN_DIR)"
 
 # Build the Go binary
