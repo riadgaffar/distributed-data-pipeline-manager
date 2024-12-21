@@ -83,6 +83,11 @@ distributed-data-pipeline-manager/
 ├── pipelines/                       # Pipeline templates and configs
 │   └── benthos/
 │       └── pipeline.yaml
+├── plugins/
+│   │   └── json/                    # JSON format plugin
+│   │   └── avro/                    # Avro format plugin
+│   │   └── parquet/                 # Parquet format plugin
+│   │   └── custom/                  # Custom format plugin
 ├── src/
 │   ├── bootstrap/                   # Application initialization and setup logic
 │   │   ├── bootstrap.go             # Initialization logic for app, Kafka, and parser

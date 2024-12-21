@@ -7,6 +7,11 @@ import (
 
 type JSONParser struct{}
 
+// Initialize the parser with a schema, if needed, NOOP for JSON
+func (p *JSONParser) Initialize(schema string) (interface{}, error) {
+	return nil, fmt.Errorf("schema initialization is not supported for JSON")
+}
+
 func (p *JSONParser) Parse(data []byte) (interface{}, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("failed to parse JSON: unexpected end of JSON input")
@@ -19,6 +24,11 @@ func (p *JSONParser) Parse(data []byte) (interface{}, error) {
 	}
 
 	return payload, nil
+}
+
+// Serialize the data, NOOP for JSON
+func (p *JSONParser) Serialize(data map[string]interface{}) (interface{}, error) {
+	return nil, fmt.Errorf("serialization is not supported for JSON")
 }
 
 func (p *JSONParser) Name() string {

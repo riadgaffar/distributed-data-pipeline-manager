@@ -1,0 +1,13 @@
+type: "format-agnostic"
+fields:
+  - name: "id"
+    type: "uuid"
+  - name: "timestamp"
+    type: "datetime"
+  - name: "format"
+    type: "string"
+    required: true
+  - name: "schema_version"
+    type: "string"
+  - name: "data"
+    type: "dynamic"

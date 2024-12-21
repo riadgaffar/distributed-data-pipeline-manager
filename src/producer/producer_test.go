@@ -15,6 +15,14 @@ type MockParser struct {
 	mock.Mock
 }
 
+func (p *MockParser) Initialize(schema string) (interface{}, error) {
+	return nil, nil
+}
+
+func (p *MockParser) Serialize(data map[string]interface{}) (interface{}, error) {
+	return nil, nil
+}
+
 func (m *MockParser) Parse(data []byte) (interface{}, error) {
 	args := m.Called(data)
 	return args.Get(0), args.Error(1)

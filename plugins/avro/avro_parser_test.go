@@ -28,19 +28,24 @@ func TestAvroSerializationAndDeserialization(t *testing.T) {
 		"name": "TestRecord",
 		"fields": [{"name": "field1", "type": "string"}]
 	}`
-	parser, err := NewAvroParser(schema)
-	assert.NoError(t, err, "Parser creation should not return an error")
+
+	initialParser := &AvroParser{}
+	parser, err := initialParser.Initialize(schema)
+	assert.NoError(t, err, "Parser initialization should not return an error")
+
+	// Use the returned parser for operations
+	avroParser := parser.(*AvroParser)
 
 	// Test data
 	data := map[string]interface{}{"field1": "test_value"}
 
-	// Serialize
-	encodedData, err := parser.Serialize(data)
+	// Serialize using the initialized parser
+	encodedData, err := avroParser.Serialize(data)
 	assert.NoError(t, err, "Serialization should not return an error")
 	assert.NotEmpty(t, encodedData, "Encoded data should not be empty")
 
-	// Deserialize
-	decodedData, err := parser.Parse(encodedData)
+	// Deserialize using the initialized parser
+	decodedData, err := avroParser.Parse(encodedData.([]byte))
 	assert.NoError(t, err, "Deserialization should not return an error")
 	assert.Equal(t, data["field1"], decodedData.(map[string]interface{})["field1"], "Decoded value should match original")
 }
@@ -51,7 +56,8 @@ func TestAvroParserInvalidBinary(t *testing.T) {
 			"name": "TestRecord",
 			"fields": [{"name": "field1", "type": "string"}]
 	}`
-	parser, err := NewAvroParser(schema)
+	parser := &AvroParser{}
+	_, err := parser.Initialize(schema)
 	assert.NoError(t, err, "Parser creation should not return an error")
 
 	invalidBinary := []byte{0x00, 0x01, 0x02}

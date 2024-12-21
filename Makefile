@@ -127,9 +127,7 @@ data-clean:
 clean:
 	@echo "Cleaning up build artifacts..."
 	rm -rf $(BIN_DIR)
-	go clean -cache 
-	go clean -modcache 
-	go clean -testcache
+	go clean -cache -modcache -testcache -i -r
 	@echo "Binary clean complete."
 
 # Debug target to print paths and environment info

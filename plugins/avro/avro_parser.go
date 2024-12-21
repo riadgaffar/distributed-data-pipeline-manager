@@ -4,52 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/linkedin/goavro"
+	"github.com/linkedin/goavro/v2"
 )
 
 // AvroParser implements the parsers.Parser interface for Avro format
 type AvroParser struct {
 	schema string // Avro schema for serialization and deserialization
-}
-
-// NewAvroParser creates a new instance of AvroParser with the provided schema
-func NewAvroParser(schema string) (*AvroParser, error) {
-	if !IsValidAvroSchema(schema) {
-		return nil, fmt.Errorf("invalid Avro schema")
-	}
-	return &AvroParser{schema: schema}, nil
-}
-
-// IsValidAvroSchema validates if the provided schema is a valid Avro schema
-func IsValidAvroSchema(schema string) bool {
-	_, err := goavro.NewCodec(schema)
-	return err == nil
-}
-
-// Parse method with dynamic validation
-func (p *AvroParser) Parse(data []byte) (interface{}, error) {
-	codec, err := goavro.NewCodec(p.schema)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Avro codec: %w", err)
-	}
-
-	nativeData, _, err := codec.NativeFromBinary(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize Avro data: %w", err)
-	}
-
-	// Validate the deserialized data structure
-	nativeMap, ok := nativeData.(map[string]interface{})
-	if !ok || len(nativeMap) == 0 {
-		return nil, fmt.Errorf("unexpected or empty data format: %T", nativeData)
-	}
-
-	// Dynamic validation based on schema
-	if err := p.validateDynamicFields(nativeMap); err != nil {
-		return nil, err
-	}
-
-	return nativeMap, nil
 }
 
 // validateDynamicFields dynamically validates fields based on the schema
@@ -130,8 +90,48 @@ func isFieldEmpty(value interface{}, fieldType interface{}) bool {
 	return false
 }
 
+// IsValidAvroSchema validates if the provided schema is a valid Avro schema
+func IsValidAvroSchema(schema string) bool {
+	_, err := goavro.NewCodec(schema)
+	return err == nil
+}
+
+// Initialize creates a new instance of AvroParser with the provided schema
+func (p *AvroParser) Initialize(schema string) (interface{}, error) {
+	if !IsValidAvroSchema(schema) {
+		return nil, fmt.Errorf("invalid Avro schema")
+	}
+	return &AvroParser{schema: schema}, nil
+}
+
+// Parse method with dynamic validation
+func (p *AvroParser) Parse(data []byte) (interface{}, error) {
+	codec, err := goavro.NewCodec(p.schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Avro codec: %w", err)
+	}
+
+	nativeData, _, err := codec.NativeFromBinary(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize Avro data: %w", err)
+	}
+
+	// Validate the deserialized data structure
+	nativeMap, ok := nativeData.(map[string]interface{})
+	if !ok || len(nativeMap) == 0 {
+		return nil, fmt.Errorf("unexpected or empty data format: %T", nativeData)
+	}
+
+	// Dynamic validation based on schema
+	if err := p.validateDynamicFields(nativeMap); err != nil {
+		return nil, err
+	}
+
+	return nativeMap, nil
+}
+
 // Serialize serializes a Go map into Avro binary format using the parser's schema
-func (p *AvroParser) Serialize(data map[string]interface{}) ([]byte, error) {
+func (p *AvroParser) Serialize(data map[string]interface{}) (interface{}, error) {
 	codec, err := goavro.NewCodec(p.schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Avro codec: %w", err)
@@ -154,3 +154,6 @@ func (p *AvroParser) Name() string {
 func (p *AvroParser) Version() string {
 	return "1.0.0"
 }
+
+// Export the parser
+var Parser AvroParser
